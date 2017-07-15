@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+	<title>Bootstrap 101 Template</title>
+
+	<!-- Bootstrap -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+	<!--[if lt IE 9]>
+		  <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+		  <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+		<![endif]-->
+
+
+	<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+	<!-- Include all compiled plugins (below), or include individual files as needed -->
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+	<!-- start of codemirror -->
+	<link rel="stylesheet" href="libs/codemirror/5.27.4/codemirror.css">
+	<link rel="stylesheet" href="libs/codemirror/5.27.4/addon/fold/foldgutter.css">
+	<link rel="stylesheet" href="libs/codemirror/5.27.4/addon/lint/lint.css">
+	<link rel="stylesheet" href="libs/codemirror/5.27.4/addon/dialog/dialog.css">
+	<link rel="stylesheet" href="libs/codemirror/5.27.4/addon/hint/show-hint.css">
+
+	<script src="libs/codemirror/5.27.4/codemirror.js"></script>
+	<script src="libs/codemirror/5.27.4/mode/javascript/javascript.js"></script>
+	<script src="libs/codemirror/5.27.4/mode/xml/xml.js"></script>
+	<script src="libs/codemirror/5.27.4/mode/css/css.js"></script>
+	<script src="libs/codemirror/5.27.4/mode/htmlmixed/htmlmixed.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/edit/closetag.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/edit/matchbrackets.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/selection/active-line.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/fold/foldcode.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/fold/foldgutter.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/fold/brace-fold.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/fold/xml-fold.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/fold/comment-fold.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/search/search.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/search/searchcursor.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/dialog/dialog.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/hint/show-hint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/hint/xml-hint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/hint/html-hint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/hint/css-hint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/hint/javascript-hint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/search/match-highlighter.js"></script>
+
+	<script src="libs/codemirror-lint/5.27.4/htmlhint.js"></script>
+	<script src="libs/codemirror-lint/5.27.4/csslint.js"></script>
+	<script src="libs/codemirror-lint/5.27.4/jshint.js"></script>
+
+	<script src="libs/codemirror/5.27.4/addon/lint/lint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/lint/html-lint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/lint/css-lint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/lint/javascript-lint.js"></script>
+	<script src="libs/codemirror/5.27.4/addon/search/jump-to-line.js"></script>
+	<script src="libs/codemirror/5.27.4/mode/markdown/markdown.js"></script>
+	<script src="libs/codemirror-lint/5.27.4/integration.js"></script>
+
+	<script>
+		$.fn.editor = function(options) {
+
+		if (!options.mode) console.warn('CodeMirror is missing options.mode.');
+		if (!options.height) console.warn('CodeMirror is missing options.height.');
+
+		if (!options.height || !options.mode) return;
+
+		if (options && options.mode === 'html') options.mode = 'text/html';
+
+		var textarea = $(this);
+		var editor = CodeMirror.fromTextArea(textarea.get(0), {
+			mode: options.mode,
+			tabMode: 'indent',
+			styleActiveLine: true,
+			lineNumbers: true,
+			lineWrapping: true,
+			autoCloseTags: true,
+			foldGutter: true,
+			dragDrop : true,
+			lint: true,
+			viewportMargin: Infinity,
+			gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter']
+		});
+		editor.setSize(null, options.height);
+	};
+
+	$(function(){
+		var textarea1 = $('textarea[name="html"]');
+		textarea1.editor({
+			mode: 'html',
+			height: 'auto'
+		});
+		var textarea2 = $('textarea[name="css"]');
+		textarea2.editor({
+			mode: 'css',
+			height: 'auto'
+		});
+	});
+	</script>
+
+	<style>
+	.CodeMirror {border: 1px solid #eee; min-height: 50px;}
+	</style>
+
+</head>
+
+<body>
+	<div class="container">
+
+		<div class="page-header">
+			<h1>CodeMirror Example <small>Linting, Autosize, and Bootstrap</small></h1>
+		</div>
+
+		<form class="form-horizontal">
+			<div class="form-group">
+				<label for="field1" class="col-sm-2 control-label">Field 1</label>
+				<div class="col-sm-10">
+					<input type="text" class="form-control" id="field1" placeholder="your input">
+				</div>
+			</div>
+			<div class="form-group">
+				<label for="html" class="col-sm-2 control-label">HTML</label>
+				<div class="col-sm-10">
+					<textarea class="form-control" name="html">
+<h1 class="foobar">Hello World</h1>
+<div>
+	This is an invalid div.
+<div
+					</textarea>
+				</div>
+			</div>
+			<div class="form-group">
+				<label for="css" class="col-sm-2 control-label">CSS</label>
+				<div class="col-sm-10">
+					<textarea class="form-control" name="css">
+.foobar {
+	color: blue;
+	background-color = invalid-color;
+}
+</textarea>
+				</div>
+			</div>
+			<div class="form-group">
+				<div class="col-sm-offset-2 col-sm-10">
+					<button type="submit" class="btn btn-primary">Save</button>
+				</div>
+			</div>
+		</form>
+	</div>
+</body>
+
+</html>
