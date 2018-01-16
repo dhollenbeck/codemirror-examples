@@ -12,6 +12,10 @@ $.fn.editor = function(options) {
         textarea = $(this);
         mode = options.mode || textarea.attr('mode') || 'html';
         if (mode === 'html') mode = 'text/html';
+        if (mode === 'handlebars') mode = {name: "handlebars", base: "text/html"};
+
+        console.log('mode', mode);
+
         editor = CodeMirror.fromTextArea(textarea.get(0), {
             mode: mode,
             readOnly: options.readOnly,

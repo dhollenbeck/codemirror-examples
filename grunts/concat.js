@@ -20,6 +20,11 @@ module.exports = function(grunt) {
                 'libs/codemirror/5.27.4/mode/javascript/javascript.js',
                 'libs/codemirror/5.27.4/mode/xml/xml.js',
                 'libs/codemirror/5.27.4/mode/css/css.js',
+                
+                'libs/codemirror/5.27.4/addon/mode/simple.js',
+                'libs/codemirror/5.27.4/addon/mode/multiplex.js',
+                'libs/codemirror/5.27.4/mode/handlebars/handlebars.js',
+
                 'libs/codemirror/5.27.4/mode/htmlmixed/htmlmixed.js',
                 'libs/codemirror/5.27.4/addon/edit/closetag.js',
                 'libs/codemirror/5.27.4/addon/edit/matchbrackets.js',
@@ -47,6 +52,7 @@ module.exports = function(grunt) {
                 'libs/codemirror/5.27.4/addon/lint/javascript-lint.js',
                 'libs/codemirror/5.27.4/addon/search/jump-to-line.js',
                 'libs/codemirror/5.27.4/mode/markdown/markdown.js',
+                
                 'libs/codemirror/5.27.4/linting/integration.js',
                 'libs/editor.js'
 			]
