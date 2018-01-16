@@ -30,16 +30,8 @@
 
 	<script>
 	$(function(){
-		var textarea1 = $('textarea[name="html"]');
-		textarea1.editor({
-			mode: 'html',
-			height: 'auto'
-		});
-		var textarea2 = $('textarea[name="css"]');
-		textarea2.editor({
-			mode: 'css',
-			height: 'auto'
-		});
+		var code = $('textarea');
+		code.editor();
 	});
 	</script>
 
@@ -66,7 +58,7 @@
 			<div class="form-group">
 				<label for="html" class="col-sm-2 control-label">HTML</label>
 				<div class="col-sm-10">
-					<textarea class="form-control" name="html">
+					<textarea class="form-control" name="html" mode="html">
 <h1 class="foobar">Hello World</h1>
 <div>
 	This is an invalid div.
@@ -77,7 +69,7 @@
 			<div class="form-group">
 				<label for="css" class="col-sm-2 control-label">CSS</label>
 				<div class="col-sm-10">
-					<textarea class="form-control" name="css">
+					<textarea class="form-control" name="css" mode="css">
 .foobar {
 	color: blue;
 	background-color = invalid-color;

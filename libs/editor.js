@@ -1,18 +1,23 @@
 $.fn.editor = function(options) {
 		
-    if (!options) return console.error('Missing options to codemirror plugin.');
-    if (!options.mode) return console.warn('CodeMirror is missing options.mode which is either `html` or `css`.');
+    //if (!options) return console.error('Missing options to codemirror plugin.');
+    //if (!options.mode) return console.warn('CodeMirror is missing options.mode which is either `html` or `css`.');
 
+    options = options || {};
     options.height = options.height || 'auto';
-    if (options.mode === 'html') options.mode = 'text/html';
+    
 
     var editors = [];
 
     this.each(function() {
 
-        var textarea = $(this);
-        var editor = CodeMirror.fromTextArea(textarea.get(0), {
-            mode: options.mode,
+        var textarea, mode, editor;
+
+        textarea = $(this);
+        mode = options.mode || textarea.attr('mode') || 'html';
+        if (mode === 'html') mode = 'text/html';
+        editor = CodeMirror.fromTextArea(textarea.get(0), {
+            mode: mode,
             readOnly: options.readOnly,
             tabMode: 'indent',
             styleActiveLine: true,
