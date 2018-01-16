@@ -1,0 +1,24 @@
+{
+  "name": "codemirror-lint-autoresize",
+  "version": "1.0.0",
+  "description": "Example codemirror in textarea supporting html and css linting and autoresize in a bootstrap template.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dhollenbeck/codemirror-lint-autoresize.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dhollenbeck/codemirror-lint-autoresize/issues"
+  },
+  "homepage": "https://github.com/dhollenbeck/codemirror-lint-autoresize#readme",
+  "devDependencies": {
+    "grunt": "^1.0.1",
+    "grunt-contrib-concat": "^1.0.1",
+    "grunt-eslint": "^20.1.0"
+  }
+}
