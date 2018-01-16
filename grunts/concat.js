@@ -1,21 +1,14 @@
 'use strict';
 
-function fixFonts(src, filename) {
-	var isFontawesome = (filename === 'public/assets/plugins/font-awesome/css/font-awesome.min.css');
-	var isBootstrap = (filename === 'public/assets/plugins/bootstrap/css/bootstrap.min.css');
-
-	if (isFontawesome) src = src.replace(/\.\.\/fonts\/fontawesome/g, '/assets/plugins/font-awesome/fonts/fontawesome');
-	if (isBootstrap) src = src.replace(/\.\.\/fonts\/glyphicons/g, '/assets/plugins/bootstrap/fonts/glyphicons');
-	return src;
-}
-
 module.exports = function(grunt) {
+
+    var banner = '/* See https://github.com/dhollenbeck/codemirror-lint-autoresize */\n\n';
 
 	grunt.config('concat', {
 		options: {
+            banner: banner,
 			process: function(src, filename) {
 				src = src.replace(/\/.*sourceMappingURL.*/g, '');
-				src = fixFonts(src, filename);
 				return src;
 			}
 		},
