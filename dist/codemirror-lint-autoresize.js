@@ -29878,12 +29878,8 @@ var ruleSets = {
 
 $.fn.editor = function(options) {
 		
-    //if (!options) return console.error('Missing options to codemirror plugin.');
-    //if (!options.mode) return console.warn('CodeMirror is missing options.mode which is either `html` or `css`.');
-
     options = options || {};
     options.height = options.height || 'auto';
-    
 
     var editors = [];
 
