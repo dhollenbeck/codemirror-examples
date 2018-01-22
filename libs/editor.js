@@ -39,6 +39,8 @@ $.fn.editor = function(options) {
             // validate with https://github.com/provejs/provejs-jquery
             if (textarea.dirty) textarea.dirty(true);
             if (textarea.validate) textarea.validate();
+
+            textarea.trigger('editor.change', editor);
         });
 
         editors.push(editor);
