@@ -30299,7 +30299,7 @@ $.fn.editor = function(options) {
         editor = CodeMirror.fromTextArea(textarea.get(0), {
             mode: mode,
             readOnly: options.readOnly,
-            tabMode: 'indent',
+            indentUnit: 4,
             styleActiveLine: true,
             lineNumbers: true,
             lineWrapping: true,
