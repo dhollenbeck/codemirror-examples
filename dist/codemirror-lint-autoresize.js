@@ -30296,8 +30296,6 @@ $.fn.editor = function(options) {
         if (mode === 'html') mode = 'text/html';
         if (mode === 'handlebars') mode = {name: "handlebars", base: "text/html"};
 
-        console.log('mode', mode);
-
         editor = CodeMirror.fromTextArea(textarea.get(0), {
             mode: mode,
             readOnly: options.readOnly,
@@ -30321,8 +30319,12 @@ $.fn.editor = function(options) {
             // validate with https://github.com/provejs/provejs-jquery
             if (textarea.dirty) textarea.dirty(true);
             if (textarea.validate) textarea.validate();
+
+            textarea.trigger('editor.change', editor);
         });
 
         editors.push(editor);
     });
+
+    return this;
 };
