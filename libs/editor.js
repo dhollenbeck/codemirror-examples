@@ -14,8 +14,6 @@ $.fn.editor = function(options) {
         if (mode === 'html') mode = 'text/html';
         if (mode === 'handlebars') mode = {name: "handlebars", base: "text/html"};
 
-        console.log('mode', mode);
-
         editor = CodeMirror.fromTextArea(textarea.get(0), {
             mode: mode,
             readOnly: options.readOnly,
@@ -45,4 +43,6 @@ $.fn.editor = function(options) {
 
         editors.push(editor);
     });
+
+    return this;
 };
