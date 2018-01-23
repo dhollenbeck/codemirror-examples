@@ -28,14 +28,15 @@ $.fn.editor = function(options) {
     editor.setSize(null, options.height);
 
     editor.on('change', function(editor) {
+		// perhaps throttle editor.save()
         editor.save();
-
+	});
+	
+    editor.on('update', function(editor) {
         // validate with https://github.com/provejs/provejs-jquery
         if (textarea.dirty) textarea.dirty(true);
         if (textarea.validate) textarea.validate();
-
-        textarea.trigger('editor.change', editor);
-    });
+	});	
 
     return editor;
 };
