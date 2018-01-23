@@ -30,8 +30,20 @@
 
 	<script>
 	$(function(){
-		var code = $('textarea');
-		code.editor();
+		var css = $('textarea[mode="css"]');
+		var html = $('textarea[mode="html"]');
+		var hbs = $('textarea[mode="handlebars"]');
+
+		var editor1 = css.editor();
+		var editor2 = html.editor();
+		var editor3 = hbs.editor();
+
+		// to get the lint errors for purpose of validation
+		var errors1 = editor1.state.lint.errors.length;
+		var errors2 = editor2.state.lint.errors.length;
+		var errors3 = editor3.state.lint.errors.length;
+
+
 	});
 	</script>
 
