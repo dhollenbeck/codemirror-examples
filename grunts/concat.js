@@ -2,7 +2,7 @@
 
 module.exports = function(grunt) {
 
-    var banner = '/* See https://github.com/dhollenbeck/codemirror-lint-autoresize */\n\n';
+    var banner = '/* See https://github.com/dhollenbeck/codemirror-examples */\n\n';
 
 	grunt.config('concat', {
 		options: {
@@ -14,7 +14,7 @@ module.exports = function(grunt) {
 		},
 		js: {
 			nonull: true,
-			dest: 'dist/codemirror-lint-autoresize.js',
+			dest: 'dist/codemirror-examples.js',
 			src: [
                 'libs/codemirror/5.27.4/codemirror.js',
                 'libs/codemirror/5.27.4/mode/javascript/javascript.js',
@@ -59,7 +59,7 @@ module.exports = function(grunt) {
 		},
 		css: {
 			nonull: true,
-			dest: 'dist/codemirror-lint-autoresize.css',
+			dest: 'dist/codemirror-examples.css',
 			src: [
                 'libs/codemirror/5.27.4/codemirror.css',
                 'libs/codemirror/5.27.4/addon/fold/foldgutter.css',
