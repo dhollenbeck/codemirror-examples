@@ -28,6 +28,7 @@
 	<link rel="stylesheet" href="../../dist/codemirror-examples.css">
 	<script src="../../dist/codemirror-examples.js"></script>
 	<script src="https://provejs.github.io/provejs-jquery/examples/prove.js"></script>
+	<script src="https://provejs.github.io/provejs-jquery/examples/decorator.js"></script>
 
 	<script>
 	$(function(){
@@ -44,6 +45,56 @@
 		var errors1 = editor1.state.lint.marked.length;
 		var errors2 = editor2.state.lint.marked.length;
 		var errors3 = editor3.state.lint.marked.length;
+
+
+		// validation
+		var form = $('form');
+		form.prove({
+			fields: {
+				css: {
+					selector: 'textarea[mode="css"]',
+					validators: {
+						proveRequired: {
+							message: 'Every body loves CSS so it is required here.'
+						},
+						proveCallback: {
+							message: 'Please fix the linting errors shown above.',
+							callback: function(fieldValue) {
+								var marks = editor1.state.lint.marked;
+								return (marks.length === 0);
+							}
+						}
+					}
+				},
+				html: {
+					selector: 'textarea[mode="html"]',
+					validators: {
+						proveCallback: {
+							message: 'Please fix the linting errors shown above.',
+							callback: function(fieldValue) {
+								var marks = editor2.state.lint.marked;
+								return (marks.length === 0);
+							}
+						}
+					}
+				},
+				hbs: {
+					selector: 'textarea[mode="handlebars"]',
+					validators: {
+						proveCallback: {
+							message: 'Please fix the linting errors shown above.',
+							callback: function(fieldValue) {
+								var marks = editor3.state.lint.marked;
+								return (marks.length === 0);
+							}
+						}
+					}
+				}
+			}
+		});
+		form.decorate('bootstrap');
+
+
 
 
 	});
