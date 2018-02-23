@@ -23,92 +23,20 @@
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 	<!-- Include all compiled plugins (below), or include individual files as needed -->
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-
 	<!-- start of codemirror -->
-	<link rel="stylesheet" href="dist/codemirror-lint-autoresize.css">
-	<script src="dist/codemirror-lint-autoresize.js"></script>
-
-	<script>
-	$(function(){
-		var css = $('textarea[mode="css"]');
-		var html = $('textarea[mode="html"]');
-		var hbs = $('textarea[mode="handlebars"]');
-
-		var editor1 = css.editor();
-		var editor2 = html.editor();
-		var editor3 = hbs.editor();
-
-		// to get the lint errors for purpose of validation
-		// see https://github.com/provejs/provejs-jquery
-		var errors1 = editor1.state.lint.marked.length;
-		var errors2 = editor2.state.lint.marked.length;
-		var errors3 = editor3.state.lint.marked.length;
-
-
-	});
-	</script>
-
-	<style>
-	.CodeMirror {border: 1px solid #eee; min-height: 50px;}
-	</style>
 
 </head>
-
 <body>
 	<div class="container">
-
 		<div class="page-header">
-			<h1>CodeMirror Example <small>Linting, Autosize, and Bootstrap</small></h1>
+			<h1>CodeMirror Examples</h1>
 		</div>
-
-		<form class="form-horizontal">
-			<div class="form-group">
-				<label for="field1" class="col-sm-2 control-label">Field 1</label>
-				<div class="col-sm-10">
-					<input type="text" class="form-control" id="field1" placeholder="your input">
-				</div>
-			</div>
-			<div class="form-group">
-				<label for="css" class="col-sm-2 control-label">CSS</label>
-				<div class="col-sm-10">
-					<textarea class="form-control" name="css" mode="css">
-.foobar {
-	color: blue;
-	background-color = invalid-color;
-}
-</textarea>
-				</div>
-			</div>
-			<div class="form-group">
-				<label for="html" class="col-sm-2 control-label">HTML</label>
-				<div class="col-sm-10">
-					<textarea class="form-control" name="html" mode="html">
-<h1 class="foobar">Hello World</h1>
-<div>
-	This is an invalid div.
-<div
-					</textarea>
-				</div>
-			</div>
-			<div class="form-group">
-				<label for="html" class="col-sm-2 control-label">Handlebars</label>
-				<div class="col-sm-10">
-					<textarea class="form-control" name="html" mode="handlebars">
-<h1 class="foobar">{{echo 'hello world'}}</h1>
-<div>
-	This is an invalid div.
-<div
-					</textarea>
-				</div>
-			</div>
-			
-			<div class="form-group">
-				<div class="col-sm-offset-2 col-sm-10">
-					<button type="submit" class="btn btn-primary">Save</button>
-				</div>
-			</div>
-		</form>
+		<p>Some examples of CodeMirror.</p>
+		<ul>
+			<li><a href="./examples/basic">Basic - Handlebars, HTML, CSS, Linting, Validation</a></li>
+			<li><a href="./examples/toolbar">Toolbar</a></li>
+			<li><a href="./examples/yamm">Mega Menu</a></li>
+		</ul>
 	</div>
 </body>
-
 </html>
