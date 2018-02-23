@@ -115,14 +115,25 @@
                                     <li><a href="#"><strong>{{upper field}}</strong> - upper case.</a></li>
                                     <li><a href="#"><strong>{{lower field}}</strong> - lower case.</a></li>
                                     <li><a href="#"><strong>{{url download 'Certificate of Completion'}}</strong> - download link.</a></li>
-                                    <li><a href="#"><strong>{{#if field}}{{else}}{{/if}}</strong> - if else logic.</a></li>
-                                    <li><a href="#"><strong>{{#each downloads}}}{{/each}}</strong> - loop array.</a></li>
+                                    <li><a href="#"><strong>{{#if field}} {{else}} {{/if}}</strong> - if else logic.</a></li>
+                                    <li><a href="#"><strong>{{#each downloads}} {{/each}}</strong> - loop array.</a></li>
                                     <li class="dropdown-header">Fields</li>
                                     <li><a href="#"><strong>{{user.firstname}}</strong> - user first name.</a></li>
                                     <li><a href="#"><strong>{{user.lastname}}</strong> - user last name.</a></li>
                                     <li><a href="#"><strong>{{user.dob}}</strong> - user date of birth.</a></li>
                                 </ul>
                             </span>
+                            <span class="dropdown">
+                                    <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">HTML
+                                    <span class="caret"></span></button>
+                                    <ul class="dropdown-menu dropdown-menu-right" id="html">
+                                        <li class="dropdown-header">Tags</li>
+                                        <li><a href="#"><strong>&lt;h1&gt;your header&lt;/h1&gt;</strong> - large header.</a></li>
+                                        <li><a href="#"><strong>&lt;h2&gt;your header&lt;/h2&gt;</strong> - medimum header.</a></li>
+                                        <li><a href="#"><strong>&lt;p&gt;your text&lt;/p&gt;</strong> - paragraph of text.</a></li>
+                                        <li><a href="#"><strong>&lt;b&gt;your text&lt;/b&gt;</strong> - bold text.</a></li>
+                                    </ul>
+                                </span>
                         </div>
                     </div>
 					<textarea class="form-control" name="html" mode="handlebars">
