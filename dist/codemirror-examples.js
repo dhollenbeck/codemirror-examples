@@ -11944,1130 +11944,6 @@ CodeMirror.multiplexingMode = function(outer /*, others */) {
 
 (function(mod) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("../xml/xml"), require("../javascript/javascript"), require("../css/css"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "../xml/xml", "../javascript/javascript", "../css/css"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  var defaultTags = {
-    script: [
-      ["lang", /(javascript|babel)/i, "javascript"],
-      ["type", /^(?:text|application)\/(?:x-)?(?:java|ecma)script$|^module$|^$/i, "javascript"],
-      ["type", /./, "text/plain"],
-      [null, null, "javascript"]
-    ],
-    style:  [
-      ["lang", /^css$/i, "css"],
-      ["type", /^(text\/)?(x-)?(stylesheet|css)$/i, "css"],
-      ["type", /./, "text/plain"],
-      [null, null, "css"]
-    ]
-  };
-
-  function maybeBackup(stream, pat, style) {
-    var cur = stream.current(), close = cur.search(pat);
-    if (close > -1) {
-      stream.backUp(cur.length - close);
-    } else if (cur.match(/<\/?$/)) {
-      stream.backUp(cur.length);
-      if (!stream.match(pat, false)) stream.match(cur);
-    }
-    return style;
-  }
-
-  var attrRegexpCache = {};
-  function getAttrRegexp(attr) {
-    var regexp = attrRegexpCache[attr];
-    if (regexp) return regexp;
-    return attrRegexpCache[attr] = new RegExp("\\s+" + attr + "\\s*=\\s*('|\")?([^'\"]+)('|\")?\\s*");
-  }
-
-  function getAttrValue(text, attr) {
-    var match = text.match(getAttrRegexp(attr))
-    return match ? /^\s*(.*?)\s*$/.exec(match[2])[1] : ""
-  }
-
-  function getTagRegexp(tagName, anchored) {
-    return new RegExp((anchored ? "^" : "") + "<\/\s*" + tagName + "\s*>", "i");
-  }
-
-  function addTags(from, to) {
-    for (var tag in from) {
-      var dest = to[tag] || (to[tag] = []);
-      var source = from[tag];
-      for (var i = source.length - 1; i >= 0; i--)
-        dest.unshift(source[i])
-    }
-  }
-
-  function findMatchingMode(tagInfo, tagText) {
-    for (var i = 0; i < tagInfo.length; i++) {
-      var spec = tagInfo[i];
-      if (!spec[0] || spec[1].test(getAttrValue(tagText, spec[0]))) return spec[2];
-    }
-  }
-
-  CodeMirror.defineMode("htmlmixed", function (config, parserConfig) {
-    var htmlMode = CodeMirror.getMode(config, {
-      name: "xml",
-      htmlMode: true,
-      multilineTagIndentFactor: parserConfig.multilineTagIndentFactor,
-      multilineTagIndentPastTag: parserConfig.multilineTagIndentPastTag
-    });
-
-    var tags = {};
-    var configTags = parserConfig && parserConfig.tags, configScript = parserConfig && parserConfig.scriptTypes;
-    addTags(defaultTags, tags);
-    if (configTags) addTags(configTags, tags);
-    if (configScript) for (var i = configScript.length - 1; i >= 0; i--)
-      tags.script.unshift(["type", configScript[i].matches, configScript[i].mode])
-
-    function html(stream, state) {
-      var style = htmlMode.token(stream, state.htmlState), tag = /\btag\b/.test(style), tagName
-      if (tag && !/[<>\s\/]/.test(stream.current()) &&
-          (tagName = state.htmlState.tagName && state.htmlState.tagName.toLowerCase()) &&
-          tags.hasOwnProperty(tagName)) {
-        state.inTag = tagName + " "
-      } else if (state.inTag && tag && />$/.test(stream.current())) {
-        var inTag = /^([\S]+) (.*)/.exec(state.inTag)
-        state.inTag = null
-        var modeSpec = stream.current() == ">" && findMatchingMode(tags[inTag[1]], inTag[2])
-        var mode = CodeMirror.getMode(config, modeSpec)
-        var endTagA = getTagRegexp(inTag[1], true), endTag = getTagRegexp(inTag[1], false);
-        state.token = function (stream, state) {
-          if (stream.match(endTagA, false)) {
-            state.token = html;
-            state.localState = state.localMode = null;
-            return null;
-          }
-          return maybeBackup(stream, endTag, state.localMode.token(stream, state.localState));
-        };
-        state.localMode = mode;
-        state.localState = CodeMirror.startState(mode, htmlMode.indent(state.htmlState, ""));
-      } else if (state.inTag) {
-        state.inTag += stream.current()
-        if (stream.eol()) state.inTag += " "
-      }
-      return style;
-    };
-
-    return {
-      startState: function () {
-        var state = CodeMirror.startState(htmlMode);
-        return {token: html, inTag: null, localMode: null, localState: null, htmlState: state};
-      },
-
-      copyState: function (state) {
-        var local;
-        if (state.localState) {
-          local = CodeMirror.copyState(state.localMode, state.localState);
-        }
-        return {token: state.token, inTag: state.inTag,
-                localMode: state.localMode, localState: local,
-                htmlState: CodeMirror.copyState(htmlMode, state.htmlState)};
-      },
-
-      token: function (stream, state) {
-        return state.token(stream, state);
-      },
-
-      indent: function (state, textAfter, line) {
-        if (!state.localMode || /^\s*<\//.test(textAfter))
-          return htmlMode.indent(state.htmlState, textAfter);
-        else if (state.localMode.indent)
-          return state.localMode.indent(state.localState, textAfter, line);
-        else
-          return CodeMirror.Pass;
-      },
-
-      innerMode: function (state) {
-        return {state: state.localState || state.htmlState, mode: state.localMode || htmlMode};
-      }
-    };
-  }, "xml", "javascript", "css");
-
-  CodeMirror.defineMIME("text/html", "htmlmixed");
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-/**
- * Tag-closer extension for CodeMirror.
- *
- * This extension adds an "autoCloseTags" option that can be set to
- * either true to get the default behavior, or an object to further
- * configure its behavior.
- *
- * These are supported options:
- *
- * `whenClosing` (default true)
- *   Whether to autoclose when the '/' of a closing tag is typed.
- * `whenOpening` (default true)
- *   Whether to autoclose the tag when the final '>' of an opening
- *   tag is typed.
- * `dontCloseTags` (default is empty tags for HTML, none for XML)
- *   An array of tag names that should not be autoclosed.
- * `indentTags` (default is block tags for HTML, none for XML)
- *   An array of tag names that should, when opened, cause a
- *   blank line to be added inside the tag, and the blank line and
- *   closing line to be indented.
- *
- * See demos/closetag.html for a usage example.
- */
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("../fold/xml-fold"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "../fold/xml-fold"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  CodeMirror.defineOption("autoCloseTags", false, function(cm, val, old) {
-    if (old != CodeMirror.Init && old)
-      cm.removeKeyMap("autoCloseTags");
-    if (!val) return;
-    var map = {name: "autoCloseTags"};
-    if (typeof val != "object" || val.whenClosing)
-      map["'/'"] = function(cm) { return autoCloseSlash(cm); };
-    if (typeof val != "object" || val.whenOpening)
-      map["'>'"] = function(cm) { return autoCloseGT(cm); };
-    cm.addKeyMap(map);
-  });
-
-  var htmlDontClose = ["area", "base", "br", "col", "command", "embed", "hr", "img", "input", "keygen", "link", "meta", "param",
-                       "source", "track", "wbr"];
-  var htmlIndent = ["applet", "blockquote", "body", "button", "div", "dl", "fieldset", "form", "frameset", "h1", "h2", "h3", "h4",
-                    "h5", "h6", "head", "html", "iframe", "layer", "legend", "object", "ol", "p", "select", "table", "ul"];
-
-  function autoCloseGT(cm) {
-    if (cm.getOption("disableInput")) return CodeMirror.Pass;
-    var ranges = cm.listSelections(), replacements = [];
-    for (var i = 0; i < ranges.length; i++) {
-      if (!ranges[i].empty()) return CodeMirror.Pass;
-      var pos = ranges[i].head, tok = cm.getTokenAt(pos);
-      var inner = CodeMirror.innerMode(cm.getMode(), tok.state), state = inner.state;
-      if (inner.mode.name != "xml" || !state.tagName) return CodeMirror.Pass;
-
-      var opt = cm.getOption("autoCloseTags"), html = inner.mode.configuration == "html";
-      var dontCloseTags = (typeof opt == "object" && opt.dontCloseTags) || (html && htmlDontClose);
-      var indentTags = (typeof opt == "object" && opt.indentTags) || (html && htmlIndent);
-
-      var tagName = state.tagName;
-      if (tok.end > pos.ch) tagName = tagName.slice(0, tagName.length - tok.end + pos.ch);
-      var lowerTagName = tagName.toLowerCase();
-      // Don't process the '>' at the end of an end-tag or self-closing tag
-      if (!tagName ||
-          tok.type == "string" && (tok.end != pos.ch || !/[\"\']/.test(tok.string.charAt(tok.string.length - 1)) || tok.string.length == 1) ||
-          tok.type == "tag" && state.type == "closeTag" ||
-          tok.string.indexOf("/") == (tok.string.length - 1) || // match something like <someTagName />
-          dontCloseTags && indexOf(dontCloseTags, lowerTagName) > -1 ||
-          closingTagExists(cm, tagName, pos, state, true))
-        return CodeMirror.Pass;
-
-      var indent = indentTags && indexOf(indentTags, lowerTagName) > -1;
-      replacements[i] = {indent: indent,
-                         text: ">" + (indent ? "\n\n" : "") + "</" + tagName + ">",
-                         newPos: indent ? CodeMirror.Pos(pos.line + 1, 0) : CodeMirror.Pos(pos.line, pos.ch + 1)};
-    }
-
-    for (var i = ranges.length - 1; i >= 0; i--) {
-      var info = replacements[i];
-      cm.replaceRange(info.text, ranges[i].head, ranges[i].anchor, "+insert");
-      var sel = cm.listSelections().slice(0);
-      sel[i] = {head: info.newPos, anchor: info.newPos};
-      cm.setSelections(sel);
-      if (info.indent) {
-        cm.indentLine(info.newPos.line, null, true);
-        cm.indentLine(info.newPos.line + 1, null, true);
-      }
-    }
-  }
-
-  function autoCloseCurrent(cm, typingSlash) {
-    var ranges = cm.listSelections(), replacements = [];
-    var head = typingSlash ? "/" : "</";
-    for (var i = 0; i < ranges.length; i++) {
-      if (!ranges[i].empty()) return CodeMirror.Pass;
-      var pos = ranges[i].head, tok = cm.getTokenAt(pos);
-      var inner = CodeMirror.innerMode(cm.getMode(), tok.state), state = inner.state;
-      if (typingSlash && (tok.type == "string" || tok.string.charAt(0) != "<" ||
-                          tok.start != pos.ch - 1))
-        return CodeMirror.Pass;
-      // Kludge to get around the fact that we are not in XML mode
-      // when completing in JS/CSS snippet in htmlmixed mode. Does not
-      // work for other XML embedded languages (there is no general
-      // way to go from a mixed mode to its current XML state).
-      var replacement;
-      if (inner.mode.name != "xml") {
-        if (cm.getMode().name == "htmlmixed" && inner.mode.name == "javascript")
-          replacement = head + "script";
-        else if (cm.getMode().name == "htmlmixed" && inner.mode.name == "css")
-          replacement = head + "style";
-        else
-          return CodeMirror.Pass;
-      } else {
-        if (!state.context || !state.context.tagName ||
-            closingTagExists(cm, state.context.tagName, pos, state))
-          return CodeMirror.Pass;
-        replacement = head + state.context.tagName;
-      }
-      if (cm.getLine(pos.line).charAt(tok.end) != ">") replacement += ">";
-      replacements[i] = replacement;
-    }
-    cm.replaceSelections(replacements);
-    ranges = cm.listSelections();
-    for (var i = 0; i < ranges.length; i++)
-      if (i == ranges.length - 1 || ranges[i].head.line < ranges[i + 1].head.line)
-        cm.indentLine(ranges[i].head.line);
-  }
-
-  function autoCloseSlash(cm) {
-    if (cm.getOption("disableInput")) return CodeMirror.Pass;
-    return autoCloseCurrent(cm, true);
-  }
-
-  CodeMirror.commands.closeTag = function(cm) { return autoCloseCurrent(cm); };
-
-  function indexOf(collection, elt) {
-    if (collection.indexOf) return collection.indexOf(elt);
-    for (var i = 0, e = collection.length; i < e; ++i)
-      if (collection[i] == elt) return i;
-    return -1;
-  }
-
-  // If xml-fold is loaded, we use its functionality to try and verify
-  // whether a given tag is actually unclosed.
-  function closingTagExists(cm, tagName, pos, state, newTag) {
-    if (!CodeMirror.scanForClosingTag) return false;
-    var end = Math.min(cm.lastLine() + 1, pos.line + 500);
-    var nextClose = CodeMirror.scanForClosingTag(cm, pos, null, end);
-    if (!nextClose || nextClose.tag != tagName) return false;
-    var cx = state.context;
-    // If the immediate wrapping context contains onCx instances of
-    // the same tag, a closing tag only exists if there are at least
-    // that many closing tags of that type following.
-    for (var onCx = newTag ? 1 : 0; cx && cx.tagName == tagName; cx = cx.prev) ++onCx;
-    pos = nextClose.to;
-    for (var i = 1; i < onCx; i++) {
-      var next = CodeMirror.scanForClosingTag(cm, pos, null, end);
-      if (!next || next.tag != tagName) return false;
-      pos = next.to;
-    }
-    return true;
-  }
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  var ie_lt8 = /MSIE \d/.test(navigator.userAgent) &&
-    (document.documentMode == null || document.documentMode < 8);
-
-  var Pos = CodeMirror.Pos;
-
-  var matching = {"(": ")>", ")": "(<", "[": "]>", "]": "[<", "{": "}>", "}": "{<"};
-
-  function findMatchingBracket(cm, where, config) {
-    var line = cm.getLineHandle(where.line), pos = where.ch - 1;
-    var afterCursor = config && config.afterCursor
-    if (afterCursor == null)
-      afterCursor = /(^| )cm-fat-cursor($| )/.test(cm.getWrapperElement().className)
-
-    // A cursor is defined as between two characters, but in in vim command mode
-    // (i.e. not insert mode), the cursor is visually represented as a
-    // highlighted box on top of the 2nd character. Otherwise, we allow matches
-    // from before or after the cursor.
-    var match = (!afterCursor && pos >= 0 && matching[line.text.charAt(pos)]) ||
-        matching[line.text.charAt(++pos)];
-    if (!match) return null;
-    var dir = match.charAt(1) == ">" ? 1 : -1;
-    if (config && config.strict && (dir > 0) != (pos == where.ch)) return null;
-    var style = cm.getTokenTypeAt(Pos(where.line, pos + 1));
-
-    var found = scanForBracket(cm, Pos(where.line, pos + (dir > 0 ? 1 : 0)), dir, style || null, config);
-    if (found == null) return null;
-    return {from: Pos(where.line, pos), to: found && found.pos,
-            match: found && found.ch == match.charAt(0), forward: dir > 0};
-  }
-
-  // bracketRegex is used to specify which type of bracket to scan
-  // should be a regexp, e.g. /[[\]]/
-  //
-  // Note: If "where" is on an open bracket, then this bracket is ignored.
-  //
-  // Returns false when no bracket was found, null when it reached
-  // maxScanLines and gave up
-  function scanForBracket(cm, where, dir, style, config) {
-    var maxScanLen = (config && config.maxScanLineLength) || 10000;
-    var maxScanLines = (config && config.maxScanLines) || 1000;
-
-    var stack = [];
-    var re = config && config.bracketRegex ? config.bracketRegex : /[(){}[\]]/;
-    var lineEnd = dir > 0 ? Math.min(where.line + maxScanLines, cm.lastLine() + 1)
-                          : Math.max(cm.firstLine() - 1, where.line - maxScanLines);
-    for (var lineNo = where.line; lineNo != lineEnd; lineNo += dir) {
-      var line = cm.getLine(lineNo);
-      if (!line) continue;
-      var pos = dir > 0 ? 0 : line.length - 1, end = dir > 0 ? line.length : -1;
-      if (line.length > maxScanLen) continue;
-      if (lineNo == where.line) pos = where.ch - (dir < 0 ? 1 : 0);
-      for (; pos != end; pos += dir) {
-        var ch = line.charAt(pos);
-        if (re.test(ch) && (style === undefined || cm.getTokenTypeAt(Pos(lineNo, pos + 1)) == style)) {
-          var match = matching[ch];
-          if ((match.charAt(1) == ">") == (dir > 0)) stack.push(ch);
-          else if (!stack.length) return {pos: Pos(lineNo, pos), ch: ch};
-          else stack.pop();
-        }
-      }
-    }
-    return lineNo - dir == (dir > 0 ? cm.lastLine() : cm.firstLine()) ? false : null;
-  }
-
-  function matchBrackets(cm, autoclear, config) {
-    // Disable brace matching in long lines, since it'll cause hugely slow updates
-    var maxHighlightLen = cm.state.matchBrackets.maxHighlightLineLength || 1000;
-    var marks = [], ranges = cm.listSelections();
-    for (var i = 0; i < ranges.length; i++) {
-      var match = ranges[i].empty() && findMatchingBracket(cm, ranges[i].head, config);
-      if (match && cm.getLine(match.from.line).length <= maxHighlightLen) {
-        var style = match.match ? "CodeMirror-matchingbracket" : "CodeMirror-nonmatchingbracket";
-        marks.push(cm.markText(match.from, Pos(match.from.line, match.from.ch + 1), {className: style}));
-        if (match.to && cm.getLine(match.to.line).length <= maxHighlightLen)
-          marks.push(cm.markText(match.to, Pos(match.to.line, match.to.ch + 1), {className: style}));
-      }
-    }
-
-    if (marks.length) {
-      // Kludge to work around the IE bug from issue #1193, where text
-      // input stops going to the textare whever this fires.
-      if (ie_lt8 && cm.state.focused) cm.focus();
-
-      var clear = function() {
-        cm.operation(function() {
-          for (var i = 0; i < marks.length; i++) marks[i].clear();
-        });
-      };
-      if (autoclear) setTimeout(clear, 800);
-      else return clear;
-    }
-  }
-
-  var currentlyHighlighted = null;
-  function doMatchBrackets(cm) {
-    cm.operation(function() {
-      if (currentlyHighlighted) {currentlyHighlighted(); currentlyHighlighted = null;}
-      currentlyHighlighted = matchBrackets(cm, false, cm.state.matchBrackets);
-    });
-  }
-
-  CodeMirror.defineOption("matchBrackets", false, function(cm, val, old) {
-    if (old && old != CodeMirror.Init) {
-      cm.off("cursorActivity", doMatchBrackets);
-      if (currentlyHighlighted) {currentlyHighlighted(); currentlyHighlighted = null;}
-    }
-    if (val) {
-      cm.state.matchBrackets = typeof val == "object" ? val : {};
-      cm.on("cursorActivity", doMatchBrackets);
-    }
-  });
-
-  CodeMirror.defineExtension("matchBrackets", function() {matchBrackets(this, true);});
-  CodeMirror.defineExtension("findMatchingBracket", function(pos, config, oldConfig){
-    // Backwards-compatibility kludge
-    if (oldConfig || typeof config == "boolean") {
-      if (!oldConfig) {
-        config = config ? {strict: true} : null
-      } else {
-        oldConfig.strict = config
-        config = oldConfig
-      }
-    }
-    return findMatchingBracket(this, pos, config)
-  });
-  CodeMirror.defineExtension("scanForBracket", function(pos, dir, style, config){
-    return scanForBracket(this, pos, dir, style, config);
-  });
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-  var WRAP_CLASS = "CodeMirror-activeline";
-  var BACK_CLASS = "CodeMirror-activeline-background";
-  var GUTT_CLASS = "CodeMirror-activeline-gutter";
-
-  CodeMirror.defineOption("styleActiveLine", false, function(cm, val, old) {
-    var prev = old == CodeMirror.Init ? false : old;
-    if (val == prev) return
-    if (prev) {
-      cm.off("beforeSelectionChange", selectionChange);
-      clearActiveLines(cm);
-      delete cm.state.activeLines;
-    }
-    if (val) {
-      cm.state.activeLines = [];
-      updateActiveLines(cm, cm.listSelections());
-      cm.on("beforeSelectionChange", selectionChange);
-    }
-  });
-
-  function clearActiveLines(cm) {
-    for (var i = 0; i < cm.state.activeLines.length; i++) {
-      cm.removeLineClass(cm.state.activeLines[i], "wrap", WRAP_CLASS);
-      cm.removeLineClass(cm.state.activeLines[i], "background", BACK_CLASS);
-      cm.removeLineClass(cm.state.activeLines[i], "gutter", GUTT_CLASS);
-    }
-  }
-
-  function sameArray(a, b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++)
-      if (a[i] != b[i]) return false;
-    return true;
-  }
-
-  function updateActiveLines(cm, ranges) {
-    var active = [];
-    for (var i = 0; i < ranges.length; i++) {
-      var range = ranges[i];
-      var option = cm.getOption("styleActiveLine");
-      if (typeof option == "object" && option.nonEmpty ? range.anchor.line != range.head.line : !range.empty())
-        continue
-      var line = cm.getLineHandleVisualStart(range.head.line);
-      if (active[active.length - 1] != line) active.push(line);
-    }
-    if (sameArray(cm.state.activeLines, active)) return;
-    cm.operation(function() {
-      clearActiveLines(cm);
-      for (var i = 0; i < active.length; i++) {
-        cm.addLineClass(active[i], "wrap", WRAP_CLASS);
-        cm.addLineClass(active[i], "background", BACK_CLASS);
-        cm.addLineClass(active[i], "gutter", GUTT_CLASS);
-      }
-      cm.state.activeLines = active;
-    });
-  }
-
-  function selectionChange(cm, sel) {
-    updateActiveLines(cm, sel.ranges);
-  }
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  function doFold(cm, pos, options, force) {
-    if (options && options.call) {
-      var finder = options;
-      options = null;
-    } else {
-      var finder = getOption(cm, options, "rangeFinder");
-    }
-    if (typeof pos == "number") pos = CodeMirror.Pos(pos, 0);
-    var minSize = getOption(cm, options, "minFoldSize");
-
-    function getRange(allowFolded) {
-      var range = finder(cm, pos);
-      if (!range || range.to.line - range.from.line < minSize) return null;
-      var marks = cm.findMarksAt(range.from);
-      for (var i = 0; i < marks.length; ++i) {
-        if (marks[i].__isFold && force !== "fold") {
-          if (!allowFolded) return null;
-          range.cleared = true;
-          marks[i].clear();
-        }
-      }
-      return range;
-    }
-
-    var range = getRange(true);
-    if (getOption(cm, options, "scanUp")) while (!range && pos.line > cm.firstLine()) {
-      pos = CodeMirror.Pos(pos.line - 1, 0);
-      range = getRange(false);
-    }
-    if (!range || range.cleared || force === "unfold") return;
-
-    var myWidget = makeWidget(cm, options);
-    CodeMirror.on(myWidget, "mousedown", function(e) {
-      myRange.clear();
-      CodeMirror.e_preventDefault(e);
-    });
-    var myRange = cm.markText(range.from, range.to, {
-      replacedWith: myWidget,
-      clearOnEnter: getOption(cm, options, "clearOnEnter"),
-      __isFold: true
-    });
-    myRange.on("clear", function(from, to) {
-      CodeMirror.signal(cm, "unfold", cm, from, to);
-    });
-    CodeMirror.signal(cm, "fold", cm, range.from, range.to);
-  }
-
-  function makeWidget(cm, options) {
-    var widget = getOption(cm, options, "widget");
-    if (typeof widget == "string") {
-      var text = document.createTextNode(widget);
-      widget = document.createElement("span");
-      widget.appendChild(text);
-      widget.className = "CodeMirror-foldmarker";
-    }
-    return widget;
-  }
-
-  // Clumsy backwards-compatible interface
-  CodeMirror.newFoldFunction = function(rangeFinder, widget) {
-    return function(cm, pos) { doFold(cm, pos, {rangeFinder: rangeFinder, widget: widget}); };
-  };
-
-  // New-style interface
-  CodeMirror.defineExtension("foldCode", function(pos, options, force) {
-    doFold(this, pos, options, force);
-  });
-
-  CodeMirror.defineExtension("isFolded", function(pos) {
-    var marks = this.findMarksAt(pos);
-    for (var i = 0; i < marks.length; ++i)
-      if (marks[i].__isFold) return true;
-  });
-
-  CodeMirror.commands.toggleFold = function(cm) {
-    cm.foldCode(cm.getCursor());
-  };
-  CodeMirror.commands.fold = function(cm) {
-    cm.foldCode(cm.getCursor(), null, "fold");
-  };
-  CodeMirror.commands.unfold = function(cm) {
-    cm.foldCode(cm.getCursor(), null, "unfold");
-  };
-  CodeMirror.commands.foldAll = function(cm) {
-    cm.operation(function() {
-      for (var i = cm.firstLine(), e = cm.lastLine(); i <= e; i++)
-        cm.foldCode(CodeMirror.Pos(i, 0), null, "fold");
-    });
-  };
-  CodeMirror.commands.unfoldAll = function(cm) {
-    cm.operation(function() {
-      for (var i = cm.firstLine(), e = cm.lastLine(); i <= e; i++)
-        cm.foldCode(CodeMirror.Pos(i, 0), null, "unfold");
-    });
-  };
-
-  CodeMirror.registerHelper("fold", "combine", function() {
-    var funcs = Array.prototype.slice.call(arguments, 0);
-    return function(cm, start) {
-      for (var i = 0; i < funcs.length; ++i) {
-        var found = funcs[i](cm, start);
-        if (found) return found;
-      }
-    };
-  });
-
-  CodeMirror.registerHelper("fold", "auto", function(cm, start) {
-    var helpers = cm.getHelpers(start, "fold");
-    for (var i = 0; i < helpers.length; i++) {
-      var cur = helpers[i](cm, start);
-      if (cur) return cur;
-    }
-  });
-
-  var defaultOptions = {
-    rangeFinder: CodeMirror.fold.auto,
-    widget: "\u2194",
-    minFoldSize: 0,
-    scanUp: false,
-    clearOnEnter: true
-  };
-
-  CodeMirror.defineOption("foldOptions", null);
-
-  function getOption(cm, options, name) {
-    if (options && options[name] !== undefined)
-      return options[name];
-    var editorOptions = cm.options.foldOptions;
-    if (editorOptions && editorOptions[name] !== undefined)
-      return editorOptions[name];
-    return defaultOptions[name];
-  }
-
-  CodeMirror.defineExtension("foldOption", function(options, name) {
-    return getOption(this, options, name);
-  });
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("./foldcode"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "./foldcode"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  CodeMirror.defineOption("foldGutter", false, function(cm, val, old) {
-    if (old && old != CodeMirror.Init) {
-      cm.clearGutter(cm.state.foldGutter.options.gutter);
-      cm.state.foldGutter = null;
-      cm.off("gutterClick", onGutterClick);
-      cm.off("change", onChange);
-      cm.off("viewportChange", onViewportChange);
-      cm.off("fold", onFold);
-      cm.off("unfold", onFold);
-      cm.off("swapDoc", onChange);
-    }
-    if (val) {
-      cm.state.foldGutter = new State(parseOptions(val));
-      updateInViewport(cm);
-      cm.on("gutterClick", onGutterClick);
-      cm.on("change", onChange);
-      cm.on("viewportChange", onViewportChange);
-      cm.on("fold", onFold);
-      cm.on("unfold", onFold);
-      cm.on("swapDoc", onChange);
-    }
-  });
-
-  var Pos = CodeMirror.Pos;
-
-  function State(options) {
-    this.options = options;
-    this.from = this.to = 0;
-  }
-
-  function parseOptions(opts) {
-    if (opts === true) opts = {};
-    if (opts.gutter == null) opts.gutter = "CodeMirror-foldgutter";
-    if (opts.indicatorOpen == null) opts.indicatorOpen = "CodeMirror-foldgutter-open";
-    if (opts.indicatorFolded == null) opts.indicatorFolded = "CodeMirror-foldgutter-folded";
-    return opts;
-  }
-
-  function isFolded(cm, line) {
-    var marks = cm.findMarks(Pos(line, 0), Pos(line + 1, 0));
-    for (var i = 0; i < marks.length; ++i)
-      if (marks[i].__isFold && marks[i].find().from.line == line) return marks[i];
-  }
-
-  function marker(spec) {
-    if (typeof spec == "string") {
-      var elt = document.createElement("div");
-      elt.className = spec + " CodeMirror-guttermarker-subtle";
-      return elt;
-    } else {
-      return spec.cloneNode(true);
-    }
-  }
-
-  function updateFoldInfo(cm, from, to) {
-    var opts = cm.state.foldGutter.options, cur = from;
-    var minSize = cm.foldOption(opts, "minFoldSize");
-    var func = cm.foldOption(opts, "rangeFinder");
-    cm.eachLine(from, to, function(line) {
-      var mark = null;
-      if (isFolded(cm, cur)) {
-        mark = marker(opts.indicatorFolded);
-      } else {
-        var pos = Pos(cur, 0);
-        var range = func && func(cm, pos);
-        if (range && range.to.line - range.from.line >= minSize)
-          mark = marker(opts.indicatorOpen);
-      }
-      cm.setGutterMarker(line, opts.gutter, mark);
-      ++cur;
-    });
-  }
-
-  function updateInViewport(cm) {
-    var vp = cm.getViewport(), state = cm.state.foldGutter;
-    if (!state) return;
-    cm.operation(function() {
-      updateFoldInfo(cm, vp.from, vp.to);
-    });
-    state.from = vp.from; state.to = vp.to;
-  }
-
-  function onGutterClick(cm, line, gutter) {
-    var state = cm.state.foldGutter;
-    if (!state) return;
-    var opts = state.options;
-    if (gutter != opts.gutter) return;
-    var folded = isFolded(cm, line);
-    if (folded) folded.clear();
-    else cm.foldCode(Pos(line, 0), opts.rangeFinder);
-  }
-
-  function onChange(cm) {
-    var state = cm.state.foldGutter;
-    if (!state) return;
-    var opts = state.options;
-    state.from = state.to = 0;
-    clearTimeout(state.changeUpdate);
-    state.changeUpdate = setTimeout(function() { updateInViewport(cm); }, opts.foldOnChangeTimeSpan || 600);
-  }
-
-  function onViewportChange(cm) {
-    var state = cm.state.foldGutter;
-    if (!state) return;
-    var opts = state.options;
-    clearTimeout(state.changeUpdate);
-    state.changeUpdate = setTimeout(function() {
-      var vp = cm.getViewport();
-      if (state.from == state.to || vp.from - state.to > 20 || state.from - vp.to > 20) {
-        updateInViewport(cm);
-      } else {
-        cm.operation(function() {
-          if (vp.from < state.from) {
-            updateFoldInfo(cm, vp.from, state.from);
-            state.from = vp.from;
-          }
-          if (vp.to > state.to) {
-            updateFoldInfo(cm, state.to, vp.to);
-            state.to = vp.to;
-          }
-        });
-      }
-    }, opts.updateViewportTimeSpan || 400);
-  }
-
-  function onFold(cm, from) {
-    var state = cm.state.foldGutter;
-    if (!state) return;
-    var line = from.line;
-    if (line >= state.from && line < state.to)
-      updateFoldInfo(cm, line, line + 1);
-  }
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-"use strict";
-
-CodeMirror.registerHelper("fold", "brace", function(cm, start) {
-  var line = start.line, lineText = cm.getLine(line);
-  var tokenType;
-
-  function findOpening(openCh) {
-    for (var at = start.ch, pass = 0;;) {
-      var found = at <= 0 ? -1 : lineText.lastIndexOf(openCh, at - 1);
-      if (found == -1) {
-        if (pass == 1) break;
-        pass = 1;
-        at = lineText.length;
-        continue;
-      }
-      if (pass == 1 && found < start.ch) break;
-      tokenType = cm.getTokenTypeAt(CodeMirror.Pos(line, found + 1));
-      if (!/^(comment|string)/.test(tokenType)) return found + 1;
-      at = found - 1;
-    }
-  }
-
-  var startToken = "{", endToken = "}", startCh = findOpening("{");
-  if (startCh == null) {
-    startToken = "[", endToken = "]";
-    startCh = findOpening("[");
-  }
-
-  if (startCh == null) return;
-  var count = 1, lastLine = cm.lastLine(), end, endCh;
-  outer: for (var i = line; i <= lastLine; ++i) {
-    var text = cm.getLine(i), pos = i == line ? startCh : 0;
-    for (;;) {
-      var nextOpen = text.indexOf(startToken, pos), nextClose = text.indexOf(endToken, pos);
-      if (nextOpen < 0) nextOpen = text.length;
-      if (nextClose < 0) nextClose = text.length;
-      pos = Math.min(nextOpen, nextClose);
-      if (pos == text.length) break;
-      if (cm.getTokenTypeAt(CodeMirror.Pos(i, pos + 1)) == tokenType) {
-        if (pos == nextOpen) ++count;
-        else if (!--count) { end = i; endCh = pos; break outer; }
-      }
-      ++pos;
-    }
-  }
-  if (end == null || line == end && endCh == startCh) return;
-  return {from: CodeMirror.Pos(line, startCh),
-          to: CodeMirror.Pos(end, endCh)};
-});
-
-CodeMirror.registerHelper("fold", "import", function(cm, start) {
-  function hasImport(line) {
-    if (line < cm.firstLine() || line > cm.lastLine()) return null;
-    var start = cm.getTokenAt(CodeMirror.Pos(line, 1));
-    if (!/\S/.test(start.string)) start = cm.getTokenAt(CodeMirror.Pos(line, start.end + 1));
-    if (start.type != "keyword" || start.string != "import") return null;
-    // Now find closing semicolon, return its position
-    for (var i = line, e = Math.min(cm.lastLine(), line + 10); i <= e; ++i) {
-      var text = cm.getLine(i), semi = text.indexOf(";");
-      if (semi != -1) return {startCh: start.end, end: CodeMirror.Pos(i, semi)};
-    }
-  }
-
-  var startLine = start.line, has = hasImport(startLine), prev;
-  if (!has || hasImport(startLine - 1) || ((prev = hasImport(startLine - 2)) && prev.end.line == startLine - 1))
-    return null;
-  for (var end = has.end;;) {
-    var next = hasImport(end.line + 1);
-    if (next == null) break;
-    end = next.end;
-  }
-  return {from: cm.clipPos(CodeMirror.Pos(startLine, has.startCh + 1)), to: end};
-});
-
-CodeMirror.registerHelper("fold", "include", function(cm, start) {
-  function hasInclude(line) {
-    if (line < cm.firstLine() || line > cm.lastLine()) return null;
-    var start = cm.getTokenAt(CodeMirror.Pos(line, 1));
-    if (!/\S/.test(start.string)) start = cm.getTokenAt(CodeMirror.Pos(line, start.end + 1));
-    if (start.type == "meta" && start.string.slice(0, 8) == "#include") return start.start + 8;
-  }
-
-  var startLine = start.line, has = hasInclude(startLine);
-  if (has == null || hasInclude(startLine - 1) != null) return null;
-  for (var end = startLine;;) {
-    var next = hasInclude(end + 1);
-    if (next == null) break;
-    ++end;
-  }
-  return {from: CodeMirror.Pos(startLine, has + 1),
-          to: cm.clipPos(CodeMirror.Pos(end))};
-});
-
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  var Pos = CodeMirror.Pos;
-  function cmp(a, b) { return a.line - b.line || a.ch - b.ch; }
-
-  var nameStartChar = "A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD";
-  var nameChar = nameStartChar + "\-\:\.0-9\\u00B7\\u0300-\\u036F\\u203F-\\u2040";
-  var xmlTagStart = new RegExp("<(/?)([" + nameStartChar + "][" + nameChar + "]*)", "g");
-
-  function Iter(cm, line, ch, range) {
-    this.line = line; this.ch = ch;
-    this.cm = cm; this.text = cm.getLine(line);
-    this.min = range ? Math.max(range.from, cm.firstLine()) : cm.firstLine();
-    this.max = range ? Math.min(range.to - 1, cm.lastLine()) : cm.lastLine();
-  }
-
-  function tagAt(iter, ch) {
-    var type = iter.cm.getTokenTypeAt(Pos(iter.line, ch));
-    return type && /\btag\b/.test(type);
-  }
-
-  function nextLine(iter) {
-    if (iter.line >= iter.max) return;
-    iter.ch = 0;
-    iter.text = iter.cm.getLine(++iter.line);
-    return true;
-  }
-  function prevLine(iter) {
-    if (iter.line <= iter.min) return;
-    iter.text = iter.cm.getLine(--iter.line);
-    iter.ch = iter.text.length;
-    return true;
-  }
-
-  function toTagEnd(iter) {
-    for (;;) {
-      var gt = iter.text.indexOf(">", iter.ch);
-      if (gt == -1) { if (nextLine(iter)) continue; else return; }
-      if (!tagAt(iter, gt + 1)) { iter.ch = gt + 1; continue; }
-      var lastSlash = iter.text.lastIndexOf("/", gt);
-      var selfClose = lastSlash > -1 && !/\S/.test(iter.text.slice(lastSlash + 1, gt));
-      iter.ch = gt + 1;
-      return selfClose ? "selfClose" : "regular";
-    }
-  }
-  function toTagStart(iter) {
-    for (;;) {
-      var lt = iter.ch ? iter.text.lastIndexOf("<", iter.ch - 1) : -1;
-      if (lt == -1) { if (prevLine(iter)) continue; else return; }
-      if (!tagAt(iter, lt + 1)) { iter.ch = lt; continue; }
-      xmlTagStart.lastIndex = lt;
-      iter.ch = lt;
-      var match = xmlTagStart.exec(iter.text);
-      if (match && match.index == lt) return match;
-    }
-  }
-
-  function toNextTag(iter) {
-    for (;;) {
-      xmlTagStart.lastIndex = iter.ch;
-      var found = xmlTagStart.exec(iter.text);
-      if (!found) { if (nextLine(iter)) continue; else return; }
-      if (!tagAt(iter, found.index + 1)) { iter.ch = found.index + 1; continue; }
-      iter.ch = found.index + found[0].length;
-      return found;
-    }
-  }
-  function toPrevTag(iter) {
-    for (;;) {
-      var gt = iter.ch ? iter.text.lastIndexOf(">", iter.ch - 1) : -1;
-      if (gt == -1) { if (prevLine(iter)) continue; else return; }
-      if (!tagAt(iter, gt + 1)) { iter.ch = gt; continue; }
-      var lastSlash = iter.text.lastIndexOf("/", gt);
-      var selfClose = lastSlash > -1 && !/\S/.test(iter.text.slice(lastSlash + 1, gt));
-      iter.ch = gt + 1;
-      return selfClose ? "selfClose" : "regular";
-    }
-  }
-
-  function findMatchingClose(iter, tag) {
-    var stack = [];
-    for (;;) {
-      var next = toNextTag(iter), end, startLine = iter.line, startCh = iter.ch - (next ? next[0].length : 0);
-      if (!next || !(end = toTagEnd(iter))) return;
-      if (end == "selfClose") continue;
-      if (next[1]) { // closing tag
-        for (var i = stack.length - 1; i >= 0; --i) if (stack[i] == next[2]) {
-          stack.length = i;
-          break;
-        }
-        if (i < 0 && (!tag || tag == next[2])) return {
-          tag: next[2],
-          from: Pos(startLine, startCh),
-          to: Pos(iter.line, iter.ch)
-        };
-      } else { // opening tag
-        stack.push(next[2]);
-      }
-    }
-  }
-  function findMatchingOpen(iter, tag) {
-    var stack = [];
-    for (;;) {
-      var prev = toPrevTag(iter);
-      if (!prev) return;
-      if (prev == "selfClose") { toTagStart(iter); continue; }
-      var endLine = iter.line, endCh = iter.ch;
-      var start = toTagStart(iter);
-      if (!start) return;
-      if (start[1]) { // closing tag
-        stack.push(start[2]);
-      } else { // opening tag
-        for (var i = stack.length - 1; i >= 0; --i) if (stack[i] == start[2]) {
-          stack.length = i;
-          break;
-        }
-        if (i < 0 && (!tag || tag == start[2])) return {
-          tag: start[2],
-          from: Pos(iter.line, iter.ch),
-          to: Pos(endLine, endCh)
-        };
-      }
-    }
-  }
-
-  CodeMirror.registerHelper("fold", "xml", function(cm, start) {
-    var iter = new Iter(cm, start.line, 0);
-    for (;;) {
-      var openTag = toNextTag(iter), end;
-      if (!openTag || iter.line != start.line || !(end = toTagEnd(iter))) return;
-      if (!openTag[1] && end != "selfClose") {
-        var startPos = Pos(iter.line, iter.ch);
-        var endPos = findMatchingClose(iter, openTag[2]);
-        return endPos && {from: startPos, to: endPos.from};
-      }
-    }
-  });
-  CodeMirror.findMatchingTag = function(cm, pos, range) {
-    var iter = new Iter(cm, pos.line, pos.ch, range);
-    if (iter.text.indexOf(">") == -1 && iter.text.indexOf("<") == -1) return;
-    var end = toTagEnd(iter), to = end && Pos(iter.line, iter.ch);
-    var start = end && toTagStart(iter);
-    if (!end || !start || cmp(iter, pos) > 0) return;
-    var here = {from: Pos(iter.line, iter.ch), to: to, tag: start[2]};
-    if (end == "selfClose") return {open: here, close: null, at: "open"};
-
-    if (start[1]) { // closing tag
-      return {open: findMatchingOpen(iter, start[2]), close: here, at: "close"};
-    } else { // opening tag
-      iter = new Iter(cm, to.line, to.ch, range);
-      return {open: here, close: findMatchingClose(iter, start[2]), at: "open"};
-    }
-  };
-
-  CodeMirror.findEnclosingTag = function(cm, pos, range, tag) {
-    var iter = new Iter(cm, pos.line, pos.ch, range);
-    for (;;) {
-      var open = findMatchingOpen(iter, tag);
-      if (!open) break;
-      var forward = new Iter(cm, pos.line, pos.ch, range);
-      var close = findMatchingClose(forward, open.tag);
-      if (close) return {open: open, close: close};
-    }
-  };
-
-  // Used by addon/edit/closetag.js
-  CodeMirror.scanForClosingTag = function(cm, pos, name, end) {
-    var iter = new Iter(cm, pos.line, pos.ch, end ? {from: 0, to: end} : null);
-    return findMatchingClose(iter, name);
-  };
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
     mod(require("../../lib/codemirror"));
   else if (typeof define == "function" && define.amd) // AMD
     define(["../../lib/codemirror"], mod);
@@ -15104,6 +13980,1421 @@ CodeMirror.registerGlobalHelper("fold", "comment", function(mode) {
   }
 });
 
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+  "use strict";
+  var GUTTER_ID = "CodeMirror-lint-markers";
+
+  function showTooltip(e, content) {
+    var tt = document.createElement("div");
+    tt.className = "CodeMirror-lint-tooltip";
+    tt.appendChild(content.cloneNode(true));
+    document.body.appendChild(tt);
+
+    function position(e) {
+      if (!tt.parentNode) return CodeMirror.off(document, "mousemove", position);
+      tt.style.top = Math.max(0, e.clientY - tt.offsetHeight - 5) + "px";
+      tt.style.left = (e.clientX + 5) + "px";
+    }
+    CodeMirror.on(document, "mousemove", position);
+    position(e);
+    if (tt.style.opacity != null) tt.style.opacity = 1;
+    return tt;
+  }
+  function rm(elt) {
+    if (elt.parentNode) elt.parentNode.removeChild(elt);
+  }
+  function hideTooltip(tt) {
+    if (!tt.parentNode) return;
+    if (tt.style.opacity == null) rm(tt);
+    tt.style.opacity = 0;
+    setTimeout(function() { rm(tt); }, 600);
+  }
+
+  function showTooltipFor(e, content, node) {
+    var tooltip = showTooltip(e, content);
+    function hide() {
+      CodeMirror.off(node, "mouseout", hide);
+      if (tooltip) { hideTooltip(tooltip); tooltip = null; }
+    }
+    var poll = setInterval(function() {
+      if (tooltip) for (var n = node;; n = n.parentNode) {
+        if (n && n.nodeType == 11) n = n.host;
+        if (n == document.body) return;
+        if (!n) { hide(); break; }
+      }
+      if (!tooltip) return clearInterval(poll);
+    }, 400);
+    CodeMirror.on(node, "mouseout", hide);
+  }
+
+  function LintState(cm, options, hasGutter) {
+    this.marked = [];
+    this.options = options;
+    this.timeout = null;
+    this.hasGutter = hasGutter;
+    this.onMouseOver = function(e) { onMouseOver(cm, e); };
+    this.waitingFor = 0
+  }
+
+  function parseOptions(_cm, options) {
+    if (options instanceof Function) return {getAnnotations: options};
+    if (!options || options === true) options = {};
+    return options;
+  }
+
+  function clearMarks(cm) {
+    var state = cm.state.lint;
+    if (state.hasGutter) cm.clearGutter(GUTTER_ID);
+    for (var i = 0; i < state.marked.length; ++i)
+      state.marked[i].clear();
+    state.marked.length = 0;
+  }
+
+  function makeMarker(labels, severity, multiple, tooltips) {
+    var marker = document.createElement("div"), inner = marker;
+    marker.className = "CodeMirror-lint-marker-" + severity;
+    if (multiple) {
+      inner = marker.appendChild(document.createElement("div"));
+      inner.className = "CodeMirror-lint-marker-multiple";
+    }
+
+    if (tooltips != false) CodeMirror.on(inner, "mouseover", function(e) {
+      showTooltipFor(e, labels, inner);
+    });
+
+    return marker;
+  }
+
+  function getMaxSeverity(a, b) {
+    if (a == "error") return a;
+    else return b;
+  }
+
+  function groupByLine(annotations) {
+    var lines = [];
+    for (var i = 0; i < annotations.length; ++i) {
+      var ann = annotations[i], line = ann.from.line;
+      (lines[line] || (lines[line] = [])).push(ann);
+    }
+    return lines;
+  }
+
+  function annotationTooltip(ann) {
+    var severity = ann.severity;
+    if (!severity) severity = "error";
+    var tip = document.createElement("div");
+    tip.className = "CodeMirror-lint-message-" + severity;
+    tip.appendChild(document.createTextNode(ann.message));
+    return tip;
+  }
+
+  function lintAsync(cm, getAnnotations, passOptions) {
+    var state = cm.state.lint
+    var id = ++state.waitingFor
+    function abort() {
+      id = -1
+      cm.off("change", abort)
+    }
+    cm.on("change", abort)
+    getAnnotations(cm.getValue(), function(annotations, arg2) {
+      cm.off("change", abort)
+      if (state.waitingFor != id) return
+      if (arg2 && annotations instanceof CodeMirror) annotations = arg2
+      updateLinting(cm, annotations)
+    }, passOptions, cm);
+  }
+
+  function startLinting(cm) {
+    var state = cm.state.lint, options = state.options;
+    var passOptions = options.options || options; // Support deprecated passing of `options` property in options
+    var getAnnotations = options.getAnnotations || cm.getHelper(CodeMirror.Pos(0, 0), "lint");
+    if (!getAnnotations) return;
+    if (options.async || getAnnotations.async) {
+      lintAsync(cm, getAnnotations, passOptions)
+    } else {
+      var annotations = getAnnotations(cm.getValue(), passOptions, cm);
+      if (!annotations) return;
+      if (annotations.then) annotations.then(function(issues) {
+        updateLinting(cm, issues);
+      });
+      else updateLinting(cm, annotations);
+    }
+  }
+
+  function updateLinting(cm, annotationsNotSorted) {
+    clearMarks(cm);
+    var state = cm.state.lint, options = state.options;
+
+    var annotations = groupByLine(annotationsNotSorted);
+
+    for (var line = 0; line < annotations.length; ++line) {
+      var anns = annotations[line];
+      if (!anns) continue;
+
+      var maxSeverity = null;
+      var tipLabel = state.hasGutter && document.createDocumentFragment();
+
+      for (var i = 0; i < anns.length; ++i) {
+        var ann = anns[i];
+        var severity = ann.severity;
+        if (!severity) severity = "error";
+        maxSeverity = getMaxSeverity(maxSeverity, severity);
+
+        if (options.formatAnnotation) ann = options.formatAnnotation(ann);
+        if (state.hasGutter) tipLabel.appendChild(annotationTooltip(ann));
+
+        if (ann.to) state.marked.push(cm.markText(ann.from, ann.to, {
+          className: "CodeMirror-lint-mark-" + severity,
+          __annotation: ann
+        }));
+      }
+
+      if (state.hasGutter)
+        cm.setGutterMarker(line, GUTTER_ID, makeMarker(tipLabel, maxSeverity, anns.length > 1,
+                                                       state.options.tooltips));
+    }
+    if (options.onUpdateLinting) options.onUpdateLinting(annotationsNotSorted, annotations, cm);
+  }
+
+  function onChange(cm) {
+    var state = cm.state.lint;
+    if (!state) return;
+    clearTimeout(state.timeout);
+    state.timeout = setTimeout(function(){startLinting(cm);}, state.options.delay || 500);
+  }
+
+  function popupTooltips(annotations, e) {
+    var target = e.target || e.srcElement;
+    var tooltip = document.createDocumentFragment();
+    for (var i = 0; i < annotations.length; i++) {
+      var ann = annotations[i];
+      tooltip.appendChild(annotationTooltip(ann));
+    }
+    showTooltipFor(e, tooltip, target);
+  }
+
+  function onMouseOver(cm, e) {
+    var target = e.target || e.srcElement;
+    if (!/\bCodeMirror-lint-mark-/.test(target.className)) return;
+    var box = target.getBoundingClientRect(), x = (box.left + box.right) / 2, y = (box.top + box.bottom) / 2;
+    var spans = cm.findMarksAt(cm.coordsChar({left: x, top: y}, "client"));
+
+    var annotations = [];
+    for (var i = 0; i < spans.length; ++i) {
+      var ann = spans[i].__annotation;
+      if (ann) annotations.push(ann);
+    }
+    if (annotations.length) popupTooltips(annotations, e);
+  }
+
+  CodeMirror.defineOption("lint", false, function(cm, val, old) {
+    if (old && old != CodeMirror.Init) {
+      clearMarks(cm);
+      if (cm.state.lint.options.lintOnChange !== false)
+        cm.off("change", onChange);
+      CodeMirror.off(cm.getWrapperElement(), "mouseover", cm.state.lint.onMouseOver);
+      clearTimeout(cm.state.lint.timeout);
+      delete cm.state.lint;
+    }
+
+    if (val) {
+      var gutters = cm.getOption("gutters"), hasLintGutter = false;
+      for (var i = 0; i < gutters.length; ++i) if (gutters[i] == GUTTER_ID) hasLintGutter = true;
+      var state = cm.state.lint = new LintState(cm, parseOptions(cm, val), hasLintGutter);
+      if (state.options.lintOnChange !== false)
+        cm.on("change", onChange);
+      if (state.options.tooltips != false && state.options.tooltips != "gutter")
+        CodeMirror.on(cm.getWrapperElement(), "mouseover", state.onMouseOver);
+
+      startLinting(cm);
+    }
+  });
+
+  CodeMirror.defineExtension("performLint", function() {
+    if (this.state.lint) startLinting(this);
+  });
+});
+
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+// Depends on htmlhint.js from http://htmlhint.com/js/htmlhint.js
+
+// declare global: HTMLHint
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"), require("htmlhint"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror", "htmlhint"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+  "use strict";
+
+  var defaultRules = {
+    "tagname-lowercase": true,
+    "attr-lowercase": true,
+    "attr-value-double-quotes": true,
+    "doctype-first": false,
+    "tag-pair": true,
+    "spec-char-escape": true,
+    "id-unique": true,
+    "src-not-empty": true,
+    "attr-no-duplication": true
+  };
+
+  CodeMirror.registerHelper("lint", "html", function(text, options) {
+    var found = [];
+    if (!window.HTMLHint) return found;
+    var messages = HTMLHint.verify(text, options && options.rules || defaultRules);
+    for (var i = 0; i < messages.length; i++) {
+      var message = messages[i];
+      var startLine = message.line - 1, endLine = message.line - 1, startCol = message.col - 1, endCol = message.col;
+      found.push({
+        from: CodeMirror.Pos(startLine, startCol),
+        to: CodeMirror.Pos(endLine, endCol),
+        message: message.message,
+        severity : message.type
+      });
+    }
+    return found;
+  });
+});
+
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+// Depends on csslint.js from https://github.com/stubbornella/csslint
+
+// declare global: CSSLint
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+"use strict";
+
+CodeMirror.registerHelper("lint", "css", function(text) {
+  var found = [];
+  if (!window.CSSLint) return found;
+  var results = CSSLint.verify(text), messages = results.messages, message = null;
+  for ( var i = 0; i < messages.length; i++) {
+    message = messages[i];
+    var startLine = message.line -1, endLine = message.line -1, startCol = message.col -1, endCol = message.col;
+    found.push({
+      from: CodeMirror.Pos(startLine, startCol),
+      to: CodeMirror.Pos(endLine, endCol),
+      message: message.message,
+      severity : message.type
+    });
+  }
+  return found;
+});
+
+});
+
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+  "use strict";
+  // declare global: JSHINT
+
+  var bogus = [ "Dangerous comment" ];
+
+  var warnings = [ [ "Expected '{'",
+                     "Statement body should be inside '{ }' braces." ] ];
+
+  var errors = [ "Missing semicolon", "Extra comma", "Missing property name",
+                 "Unmatched ", " and instead saw", " is not defined",
+                 "Unclosed string", "Stopping, unable to continue" ];
+
+  function validator(text, options) {
+    if (!window.JSHINT) return [];
+    JSHINT(text, options, options.globals);
+    var errors = JSHINT.data().errors, result = [];
+    if (errors) parseErrors(errors, result);
+    return result;
+  }
+
+  CodeMirror.registerHelper("lint", "javascript", validator);
+
+  function cleanup(error) {
+    // All problems are warnings by default
+    fixWith(error, warnings, "warning", true);
+    fixWith(error, errors, "error");
+
+    return isBogus(error) ? null : error;
+  }
+
+  function fixWith(error, fixes, severity, force) {
+    var description, fix, find, replace, found;
+
+    description = error.description;
+
+    for ( var i = 0; i < fixes.length; i++) {
+      fix = fixes[i];
+      find = (typeof fix === "string" ? fix : fix[0]);
+      replace = (typeof fix === "string" ? null : fix[1]);
+      found = description.indexOf(find) !== -1;
+
+      if (force || found) {
+        error.severity = severity;
+      }
+      if (found && replace) {
+        error.description = replace;
+      }
+    }
+  }
+
+  function isBogus(error) {
+    var description = error.description;
+    for ( var i = 0; i < bogus.length; i++) {
+      if (description.indexOf(bogus[i]) !== -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function parseErrors(errors, output) {
+    for ( var i = 0; i < errors.length; i++) {
+      var error = errors[i];
+      if (error) {
+        var linetabpositions, index;
+
+        linetabpositions = [];
+
+        // This next block is to fix a problem in jshint. Jshint
+        // replaces
+        // all tabs with spaces then performs some checks. The error
+        // positions (character/space) are then reported incorrectly,
+        // not taking the replacement step into account. Here we look
+        // at the evidence line and try to adjust the character position
+        // to the correct value.
+        if (error.evidence) {
+          // Tab positions are computed once per line and cached
+          var tabpositions = linetabpositions[error.line];
+          if (!tabpositions) {
+            var evidence = error.evidence;
+            tabpositions = [];
+            // ugggh phantomjs does not like this
+            // forEachChar(evidence, function(item, index) {
+            Array.prototype.forEach.call(evidence, function(item,
+                                                            index) {
+              if (item === '\t') {
+                // First col is 1 (not 0) to match error
+                // positions
+                tabpositions.push(index + 1);
+              }
+            });
+            linetabpositions[error.line] = tabpositions;
+          }
+          if (tabpositions.length > 0) {
+            var pos = error.character;
+            tabpositions.forEach(function(tabposition) {
+              if (pos > tabposition) pos -= 1;
+            });
+            error.character = pos;
+          }
+        }
+
+        var start = error.character - 1, end = start + 1;
+        if (error.evidence) {
+          index = error.evidence.substring(start).search(/.\b/);
+          if (index > -1) {
+            end += index;
+          }
+        }
+
+        // Convert to format expected by validation service
+        error.description = error.reason;// + "(jshint)";
+        error.start = error.character;
+        error.end = end;
+        error = cleanup(error);
+
+        if (error)
+          output.push({message: error.description,
+                       severity: error.severity,
+                       from: CodeMirror.Pos(error.line - 1, start),
+                       to: CodeMirror.Pos(error.line - 1, end)});
+      }
+    }
+  }
+});
+
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+// Defines jumpToLine command. Uses dialog.js if present.
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"), require("../dialog/dialog"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror", "../dialog/dialog"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+  "use strict";
+
+  function dialog(cm, text, shortText, deflt, f) {
+    if (cm.openDialog) cm.openDialog(text, f, {value: deflt, selectValueOnOpen: true});
+    else f(prompt(shortText, deflt));
+  }
+
+  var jumpDialog =
+      'Jump to line: <input type="text" style="width: 10em" class="CodeMirror-search-field"/> <span style="color: #888" class="CodeMirror-search-hint">(Use line:column or scroll% syntax)</span>';
+
+  function interpretLine(cm, string) {
+    var num = Number(string)
+    if (/^[-+]/.test(string)) return cm.getCursor().line + num
+    else return num - 1
+  }
+
+  CodeMirror.commands.jumpToLine = function(cm) {
+    var cur = cm.getCursor();
+    dialog(cm, jumpDialog, "Jump to line:", (cur.line + 1) + ":" + cur.ch, function(posStr) {
+      if (!posStr) return;
+
+      var match;
+      if (match = /^\s*([\+\-]?\d+)\s*\:\s*(\d+)\s*$/.exec(posStr)) {
+        cm.setCursor(interpretLine(cm, match[1]), Number(match[2]))
+      } else if (match = /^\s*([\+\-]?\d+(\.\d+)?)\%\s*/.exec(posStr)) {
+        var line = Math.round(cm.lineCount() * Number(match[1]) / 100);
+        if (/^[-+]/.test(match[1])) line = cur.line + line + 1;
+        cm.setCursor(line - 1, cur.ch);
+      } else if (match = /^\s*\:?\s*([\+\-]?\d+)\s*/.exec(posStr)) {
+        cm.setCursor(interpretLine(cm, match[1]), cur.ch);
+      }
+    });
+  };
+
+  CodeMirror.keyMap["default"]["Alt-G"] = "jumpToLine";
+});
+
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: http://codemirror.net/LICENSE
+
+(function(mod) {
+  if (typeof exports == "object" && typeof module == "object") // CommonJS
+    mod(require("../../lib/codemirror"), require("../xml/xml"), require("../meta"));
+  else if (typeof define == "function" && define.amd) // AMD
+    define(["../../lib/codemirror", "../xml/xml", "../meta"], mod);
+  else // Plain browser env
+    mod(CodeMirror);
+})(function(CodeMirror) {
+"use strict";
+
+CodeMirror.defineMode("markdown", function(cmCfg, modeCfg) {
+
+  var htmlMode = CodeMirror.getMode(cmCfg, "text/html");
+  var htmlModeMissing = htmlMode.name == "null"
+
+  function getMode(name) {
+    if (CodeMirror.findModeByName) {
+      var found = CodeMirror.findModeByName(name);
+      if (found) name = found.mime || found.mimes[0];
+    }
+    var mode = CodeMirror.getMode(cmCfg, name);
+    return mode.name == "null" ? null : mode;
+  }
+
+  // Should characters that affect highlighting be highlighted separate?
+  // Does not include characters that will be output (such as `1.` and `-` for lists)
+  if (modeCfg.highlightFormatting === undefined)
+    modeCfg.highlightFormatting = false;
+
+  // Maximum number of nested blockquotes. Set to 0 for infinite nesting.
+  // Excess `>` will emit `error` token.
+  if (modeCfg.maxBlockquoteDepth === undefined)
+    modeCfg.maxBlockquoteDepth = 0;
+
+  // Use `fencedCodeBlocks` to configure fenced code blocks. false to
+  // disable, string to specify a precise regexp that the fence should
+  // match, and true to allow three or more backticks or tildes (as
+  // per CommonMark).
+
+  // Turn on task lists? ("- [ ] " and "- [x] ")
+  if (modeCfg.taskLists === undefined) modeCfg.taskLists = false;
+
+  // Turn on strikethrough syntax
+  if (modeCfg.strikethrough === undefined)
+    modeCfg.strikethrough = false;
+
+  // Allow token types to be overridden by user-provided token types.
+  if (modeCfg.tokenTypeOverrides === undefined)
+    modeCfg.tokenTypeOverrides = {};
+
+  var tokenTypes = {
+    header: "header",
+    code: "comment",
+    quote: "quote",
+    list1: "variable-2",
+    list2: "variable-3",
+    list3: "keyword",
+    hr: "hr",
+    image: "image",
+    imageAltText: "image-alt-text",
+    imageMarker: "image-marker",
+    formatting: "formatting",
+    linkInline: "link",
+    linkEmail: "link",
+    linkText: "link",
+    linkHref: "string",
+    em: "em",
+    strong: "strong",
+    strikethrough: "strikethrough"
+  };
+
+  for (var tokenType in tokenTypes) {
+    if (tokenTypes.hasOwnProperty(tokenType) && modeCfg.tokenTypeOverrides[tokenType]) {
+      tokenTypes[tokenType] = modeCfg.tokenTypeOverrides[tokenType];
+    }
+  }
+
+  var hrRE = /^([*\-_])(?:\s*\1){2,}\s*$/
+  ,   listRE = /^(?:[*\-+]|^[0-9]+([.)]))\s+/
+  ,   taskListRE = /^\[(x| )\](?=\s)/ // Must follow listRE
+  ,   atxHeaderRE = modeCfg.allowAtxHeaderWithoutSpace ? /^(#+)/ : /^(#+)(?: |$)/
+  ,   setextHeaderRE = /^ *(?:\={1,}|-{1,})\s*$/
+  ,   textRE = /^[^#!\[\]*_\\<>` "'(~]+/
+  ,   fencedCodeRE = new RegExp("^(" + (modeCfg.fencedCodeBlocks === true ? "~~~+|```+" : modeCfg.fencedCodeBlocks) +
+                                ")[ \\t]*([\\w+#\-]*)")
+  ,   punctuation = /[!\"#$%&\'()*+,\-\.\/:;<=>?@\[\\\]^_`{|}~—]/
+
+  function switchInline(stream, state, f) {
+    state.f = state.inline = f;
+    return f(stream, state);
+  }
+
+  function switchBlock(stream, state, f) {
+    state.f = state.block = f;
+    return f(stream, state);
+  }
+
+  function lineIsEmpty(line) {
+    return !line || !/\S/.test(line.string)
+  }
+
+  // Blocks
+
+  function blankLine(state) {
+    // Reset linkTitle state
+    state.linkTitle = false;
+    // Reset EM state
+    state.em = false;
+    // Reset STRONG state
+    state.strong = false;
+    // Reset strikethrough state
+    state.strikethrough = false;
+    // Reset state.quote
+    state.quote = 0;
+    // Reset state.indentedCode
+    state.indentedCode = false;
+    if (state.f == htmlBlock) {
+      state.f = inlineNormal;
+      state.block = blockNormal;
+    }
+    // Reset state.trailingSpace
+    state.trailingSpace = 0;
+    state.trailingSpaceNewLine = false;
+    // Mark this line as blank
+    state.prevLine = state.thisLine
+    state.thisLine = null
+    return null;
+  }
+
+  function blockNormal(stream, state) {
+    var sol = stream.sol();
+
+    var prevLineIsList = state.list !== false,
+        prevLineIsIndentedCode = state.indentedCode;
+
+    state.indentedCode = false;
+
+    if (prevLineIsList) {
+      if (state.indentationDiff >= 0) { // Continued list
+        if (state.indentationDiff < 4) { // Only adjust indentation if *not* a code block
+          state.indentation -= state.indentationDiff;
+        }
+        state.list = null;
+      } else if (state.indentation > 0) {
+        state.list = null;
+      } else { // No longer a list
+        state.list = false;
+      }
+    }
+
+    var match = null;
+    if (state.indentationDiff >= 4 && (prevLineIsIndentedCode || lineIsEmpty(state.prevLine))) {
+      stream.skipToEnd();
+      state.indentation -= 4;
+      state.indentedCode = true;
+      return tokenTypes.code;
+    } else if (stream.eatSpace()) {
+      return null;
+    } else if ((match = stream.match(atxHeaderRE)) && match[1].length <= 6) {
+      state.header = match[1].length;
+      if (modeCfg.highlightFormatting) state.formatting = "header";
+      state.f = state.inline;
+      return getType(state);
+    } else if (!lineIsEmpty(state.prevLine) && !state.quote && !prevLineIsList &&
+               !prevLineIsIndentedCode && (match = stream.match(setextHeaderRE))) {
+      state.header = match[0].charAt(0) == '=' ? 1 : 2;
+      if (modeCfg.highlightFormatting) state.formatting = "header";
+      state.f = state.inline;
+      return getType(state);
+    } else if (stream.eat('>')) {
+      state.quote = sol ? 1 : state.quote + 1;
+      if (modeCfg.highlightFormatting) state.formatting = "quote";
+      stream.eatSpace();
+      return getType(state);
+    } else if (stream.peek() === '[') {
+      return switchInline(stream, state, footnoteLink);
+    } else if (stream.match(hrRE, true)) {
+      state.hr = true;
+      return tokenTypes.hr;
+    } else if (match = stream.match(listRE)) {
+      var listType = match[1] ? "ol" : "ul";
+      state.indentation = stream.column() + stream.current().length;
+      state.list = true;
+
+      // While this list item's marker's indentation
+      // is less than the deepest list item's content's indentation,
+      // pop the deepest list item indentation off the stack.
+      while (state.listStack && stream.column() < state.listStack[state.listStack.length - 1]) {
+        state.listStack.pop();
+      }
+
+      // Add this list item's content's indentation to the stack
+      state.listStack.push(state.indentation);
+
+      if (modeCfg.taskLists && stream.match(taskListRE, false)) {
+        state.taskList = true;
+      }
+      state.f = state.inline;
+      if (modeCfg.highlightFormatting) state.formatting = ["list", "list-" + listType];
+      return getType(state);
+    } else if (modeCfg.fencedCodeBlocks && (match = stream.match(fencedCodeRE, true))) {
+      state.fencedChars = match[1]
+      // try switching mode
+      state.localMode = getMode(match[2]);
+      if (state.localMode) state.localState = CodeMirror.startState(state.localMode);
+      state.f = state.block = local;
+      if (modeCfg.highlightFormatting) state.formatting = "code-block";
+      state.code = -1
+      return getType(state);
+    }
+
+    return switchInline(stream, state, state.inline);
+  }
+
+  function htmlBlock(stream, state) {
+    var style = htmlMode.token(stream, state.htmlState);
+    if (!htmlModeMissing) {
+      var inner = CodeMirror.innerMode(htmlMode, state.htmlState)
+      if ((inner.mode.name == "xml" && inner.state.tagStart === null &&
+           (!inner.state.context && inner.state.tokenize.isInText)) ||
+          (state.md_inside && stream.current().indexOf(">") > -1)) {
+        state.f = inlineNormal;
+        state.block = blockNormal;
+        state.htmlState = null;
+      }
+    }
+    return style;
+  }
+
+  function local(stream, state) {
+    if (state.fencedChars && stream.match(state.fencedChars)) {
+      if (modeCfg.highlightFormatting) state.formatting = "code-block";
+      var returnType = getType(state)
+      state.localMode = state.localState = null;
+      state.block = blockNormal;
+      state.f = inlineNormal;
+      state.fencedChars = null;
+      state.code = 0
+      return returnType;
+    } else if (state.fencedChars && stream.skipTo(state.fencedChars)) {
+      return "comment"
+    } else if (state.localMode) {
+      return state.localMode.token(stream, state.localState);
+    } else {
+      stream.skipToEnd();
+      return tokenTypes.code;
+    }
+  }
+
+  // Inline
+  function getType(state) {
+    var styles = [];
+
+    if (state.formatting) {
+      styles.push(tokenTypes.formatting);
+
+      if (typeof state.formatting === "string") state.formatting = [state.formatting];
+
+      for (var i = 0; i < state.formatting.length; i++) {
+        styles.push(tokenTypes.formatting + "-" + state.formatting[i]);
+
+        if (state.formatting[i] === "header") {
+          styles.push(tokenTypes.formatting + "-" + state.formatting[i] + "-" + state.header);
+        }
+
+        // Add `formatting-quote` and `formatting-quote-#` for blockquotes
+        // Add `error` instead if the maximum blockquote nesting depth is passed
+        if (state.formatting[i] === "quote") {
+          if (!modeCfg.maxBlockquoteDepth || modeCfg.maxBlockquoteDepth >= state.quote) {
+            styles.push(tokenTypes.formatting + "-" + state.formatting[i] + "-" + state.quote);
+          } else {
+            styles.push("error");
+          }
+        }
+      }
+    }
+
+    if (state.taskOpen) {
+      styles.push("meta");
+      return styles.length ? styles.join(' ') : null;
+    }
+    if (state.taskClosed) {
+      styles.push("property");
+      return styles.length ? styles.join(' ') : null;
+    }
+
+    if (state.linkHref) {
+      styles.push(tokenTypes.linkHref, "url");
+    } else { // Only apply inline styles to non-url text
+      if (state.strong) { styles.push(tokenTypes.strong); }
+      if (state.em) { styles.push(tokenTypes.em); }
+      if (state.strikethrough) { styles.push(tokenTypes.strikethrough); }
+      if (state.linkText) { styles.push(tokenTypes.linkText); }
+      if (state.code) { styles.push(tokenTypes.code); }
+      if (state.image) { styles.push(tokenTypes.image); }
+      if (state.imageAltText) { styles.push(tokenTypes.imageAltText, "link"); }
+      if (state.imageMarker) { styles.push(tokenTypes.imageMarker); }
+    }
+
+    if (state.header) { styles.push(tokenTypes.header, tokenTypes.header + "-" + state.header); }
+
+    if (state.quote) {
+      styles.push(tokenTypes.quote);
+
+      // Add `quote-#` where the maximum for `#` is modeCfg.maxBlockquoteDepth
+      if (!modeCfg.maxBlockquoteDepth || modeCfg.maxBlockquoteDepth >= state.quote) {
+        styles.push(tokenTypes.quote + "-" + state.quote);
+      } else {
+        styles.push(tokenTypes.quote + "-" + modeCfg.maxBlockquoteDepth);
+      }
+    }
+
+    if (state.list !== false) {
+      var listMod = (state.listStack.length - 1) % 3;
+      if (!listMod) {
+        styles.push(tokenTypes.list1);
+      } else if (listMod === 1) {
+        styles.push(tokenTypes.list2);
+      } else {
+        styles.push(tokenTypes.list3);
+      }
+    }
+
+    if (state.trailingSpaceNewLine) {
+      styles.push("trailing-space-new-line");
+    } else if (state.trailingSpace) {
+      styles.push("trailing-space-" + (state.trailingSpace % 2 ? "a" : "b"));
+    }
+
+    return styles.length ? styles.join(' ') : null;
+  }
+
+  function handleText(stream, state) {
+    if (stream.match(textRE, true)) {
+      return getType(state);
+    }
+    return undefined;
+  }
+
+  function inlineNormal(stream, state) {
+    var style = state.text(stream, state);
+    if (typeof style !== 'undefined')
+      return style;
+
+    if (state.list) { // List marker (*, +, -, 1., etc)
+      state.list = null;
+      return getType(state);
+    }
+
+    if (state.taskList) {
+      var taskOpen = stream.match(taskListRE, true)[1] !== "x";
+      if (taskOpen) state.taskOpen = true;
+      else state.taskClosed = true;
+      if (modeCfg.highlightFormatting) state.formatting = "task";
+      state.taskList = false;
+      return getType(state);
+    }
+
+    state.taskOpen = false;
+    state.taskClosed = false;
+
+    if (state.header && stream.match(/^#+$/, true)) {
+      if (modeCfg.highlightFormatting) state.formatting = "header";
+      return getType(state);
+    }
+
+    var ch = stream.next();
+
+    // Matches link titles present on next line
+    if (state.linkTitle) {
+      state.linkTitle = false;
+      var matchCh = ch;
+      if (ch === '(') {
+        matchCh = ')';
+      }
+      matchCh = (matchCh+'').replace(/([.?*+^\[\]\\(){}|-])/g, "\\$1");
+      var regex = '^\\s*(?:[^' + matchCh + '\\\\]+|\\\\\\\\|\\\\.)' + matchCh;
+      if (stream.match(new RegExp(regex), true)) {
+        return tokenTypes.linkHref;
+      }
+    }
+
+    // If this block is changed, it may need to be updated in GFM mode
+    if (ch === '`') {
+      var previousFormatting = state.formatting;
+      if (modeCfg.highlightFormatting) state.formatting = "code";
+      stream.eatWhile('`');
+      var count = stream.current().length
+      if (state.code == 0) {
+        state.code = count
+        return getType(state)
+      } else if (count == state.code) { // Must be exact
+        var t = getType(state)
+        state.code = 0
+        return t
+      } else {
+        state.formatting = previousFormatting
+        return getType(state)
+      }
+    } else if (state.code) {
+      return getType(state);
+    }
+
+    if (ch === '\\') {
+      stream.next();
+      if (modeCfg.highlightFormatting) {
+        var type = getType(state);
+        var formattingEscape = tokenTypes.formatting + "-escape";
+        return type ? type + " " + formattingEscape : formattingEscape;
+      }
+    }
+
+    if (ch === '!' && stream.match(/\[[^\]]*\] ?(?:\(|\[)/, false)) {
+      state.imageMarker = true;
+      state.image = true;
+      if (modeCfg.highlightFormatting) state.formatting = "image";
+      return getType(state);
+    }
+
+    if (ch === '[' && state.imageMarker && stream.match(/[^\]]*\](\(.*?\)| ?\[.*?\])/, false)) {
+      state.imageMarker = false;
+      state.imageAltText = true
+      if (modeCfg.highlightFormatting) state.formatting = "image";
+      return getType(state);
+    }
+
+    if (ch === ']' && state.imageAltText) {
+      if (modeCfg.highlightFormatting) state.formatting = "image";
+      var type = getType(state);
+      state.imageAltText = false;
+      state.image = false;
+      state.inline = state.f = linkHref;
+      return type;
+    }
+
+    if (ch === '[' && !state.image) {
+      state.linkText = true;
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      return getType(state);
+    }
+
+    if (ch === ']' && state.linkText) {
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      var type = getType(state);
+      state.linkText = false;
+      state.inline = state.f = stream.match(/\(.*?\)| ?\[.*?\]/, false) ? linkHref : inlineNormal
+      return type;
+    }
+
+    if (ch === '<' && stream.match(/^(https?|ftps?):\/\/(?:[^\\>]|\\.)+>/, false)) {
+      state.f = state.inline = linkInline;
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      var type = getType(state);
+      if (type){
+        type += " ";
+      } else {
+        type = "";
+      }
+      return type + tokenTypes.linkInline;
+    }
+
+    if (ch === '<' && stream.match(/^[^> \\]+@(?:[^\\>]|\\.)+>/, false)) {
+      state.f = state.inline = linkInline;
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      var type = getType(state);
+      if (type){
+        type += " ";
+      } else {
+        type = "";
+      }
+      return type + tokenTypes.linkEmail;
+    }
+
+    if (ch === '<' && stream.match(/^(!--|[a-z]+(?:\s+[a-z_:.\-]+(?:\s*=\s*[^ >]+)?)*\s*>)/i, false)) {
+      var end = stream.string.indexOf(">", stream.pos);
+      if (end != -1) {
+        var atts = stream.string.substring(stream.start, end);
+        if (/markdown\s*=\s*('|"){0,1}1('|"){0,1}/.test(atts)) state.md_inside = true;
+      }
+      stream.backUp(1);
+      state.htmlState = CodeMirror.startState(htmlMode);
+      return switchBlock(stream, state, htmlBlock);
+    }
+
+    if (ch === '<' && stream.match(/^\/\w*?>/)) {
+      state.md_inside = false;
+      return "tag";
+    } else if (ch === "*" || ch === "_") {
+      var len = 1, before = stream.pos == 1 ? " " : stream.string.charAt(stream.pos - 2)
+      while (len < 3 && stream.eat(ch)) len++
+      var after = stream.peek() || " "
+      // See http://spec.commonmark.org/0.27/#emphasis-and-strong-emphasis
+      var leftFlanking = !/\s/.test(after) && (!punctuation.test(after) || /\s/.test(before) || punctuation.test(before))
+      var rightFlanking = !/\s/.test(before) && (!punctuation.test(before) || /\s/.test(after) || punctuation.test(after))
+      var setEm = null, setStrong = null
+      if (len % 2) { // Em
+        if (!state.em && leftFlanking && (ch === "*" || !rightFlanking || punctuation.test(before)))
+          setEm = true
+        else if (state.em == ch && rightFlanking && (ch === "*" || !leftFlanking || punctuation.test(after)))
+          setEm = false
+      }
+      if (len > 1) { // Strong
+        if (!state.strong && leftFlanking && (ch === "*" || !rightFlanking || punctuation.test(before)))
+          setStrong = true
+        else if (state.strong == ch && rightFlanking && (ch === "*" || !leftFlanking || punctuation.test(after)))
+          setStrong = false
+      }
+      if (setStrong != null || setEm != null) {
+        if (modeCfg.highlightFormatting) state.formatting = setEm == null ? "strong" : setStrong == null ? "em" : "strong em"
+        if (setEm === true) state.em = ch
+        if (setStrong === true) state.strong = ch
+        var t = getType(state)
+        if (setEm === false) state.em = false
+        if (setStrong === false) state.strong = false
+        return t
+      }
+    } else if (ch === ' ') {
+      if (stream.eat('*') || stream.eat('_')) { // Probably surrounded by spaces
+        if (stream.peek() === ' ') { // Surrounded by spaces, ignore
+          return getType(state);
+        } else { // Not surrounded by spaces, back up pointer
+          stream.backUp(1);
+        }
+      }
+    }
+
+    if (modeCfg.strikethrough) {
+      if (ch === '~' && stream.eatWhile(ch)) {
+        if (state.strikethrough) {// Remove strikethrough
+          if (modeCfg.highlightFormatting) state.formatting = "strikethrough";
+          var t = getType(state);
+          state.strikethrough = false;
+          return t;
+        } else if (stream.match(/^[^\s]/, false)) {// Add strikethrough
+          state.strikethrough = true;
+          if (modeCfg.highlightFormatting) state.formatting = "strikethrough";
+          return getType(state);
+        }
+      } else if (ch === ' ') {
+        if (stream.match(/^~~/, true)) { // Probably surrounded by space
+          if (stream.peek() === ' ') { // Surrounded by spaces, ignore
+            return getType(state);
+          } else { // Not surrounded by spaces, back up pointer
+            stream.backUp(2);
+          }
+        }
+      }
+    }
+
+    if (ch === ' ') {
+      if (stream.match(/ +$/, false)) {
+        state.trailingSpace++;
+      } else if (state.trailingSpace) {
+        state.trailingSpaceNewLine = true;
+      }
+    }
+
+    return getType(state);
+  }
+
+  function linkInline(stream, state) {
+    var ch = stream.next();
+
+    if (ch === ">") {
+      state.f = state.inline = inlineNormal;
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      var type = getType(state);
+      if (type){
+        type += " ";
+      } else {
+        type = "";
+      }
+      return type + tokenTypes.linkInline;
+    }
+
+    stream.match(/^[^>]+/, true);
+
+    return tokenTypes.linkInline;
+  }
+
+  function linkHref(stream, state) {
+    // Check if space, and return NULL if so (to avoid marking the space)
+    if(stream.eatSpace()){
+      return null;
+    }
+    var ch = stream.next();
+    if (ch === '(' || ch === '[') {
+      state.f = state.inline = getLinkHrefInside(ch === "(" ? ")" : "]");
+      if (modeCfg.highlightFormatting) state.formatting = "link-string";
+      state.linkHref = true;
+      return getType(state);
+    }
+    return 'error';
+  }
+
+  var linkRE = {
+    ")": /^(?:[^\\\(\)]|\\.|\((?:[^\\\(\)]|\\.)*\))*?(?=\))/,
+    "]": /^(?:[^\\\[\]]|\\.|\[(?:[^\\\[\]]|\\.)*\])*?(?=\])/
+  }
+
+  function getLinkHrefInside(endChar) {
+    return function(stream, state) {
+      var ch = stream.next();
+
+      if (ch === endChar) {
+        state.f = state.inline = inlineNormal;
+        if (modeCfg.highlightFormatting) state.formatting = "link-string";
+        var returnState = getType(state);
+        state.linkHref = false;
+        return returnState;
+      }
+
+      stream.match(linkRE[endChar])
+      state.linkHref = true;
+      return getType(state);
+    };
+  }
+
+  function footnoteLink(stream, state) {
+    if (stream.match(/^([^\]\\]|\\.)*\]:/, false)) {
+      state.f = footnoteLinkInside;
+      stream.next(); // Consume [
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      state.linkText = true;
+      return getType(state);
+    }
+    return switchInline(stream, state, inlineNormal);
+  }
+
+  function footnoteLinkInside(stream, state) {
+    if (stream.match(/^\]:/, true)) {
+      state.f = state.inline = footnoteUrl;
+      if (modeCfg.highlightFormatting) state.formatting = "link";
+      var returnType = getType(state);
+      state.linkText = false;
+      return returnType;
+    }
+
+    stream.match(/^([^\]\\]|\\.)+/, true);
+
+    return tokenTypes.linkText;
+  }
+
+  function footnoteUrl(stream, state) {
+    // Check if space, and return NULL if so (to avoid marking the space)
+    if(stream.eatSpace()){
+      return null;
+    }
+    // Match URL
+    stream.match(/^[^\s]+/, true);
+    // Check for link title
+    if (stream.peek() === undefined) { // End of line, set flag to check next line
+      state.linkTitle = true;
+    } else { // More content on line, check if link title
+      stream.match(/^(?:\s+(?:"(?:[^"\\]|\\\\|\\.)+"|'(?:[^'\\]|\\\\|\\.)+'|\((?:[^)\\]|\\\\|\\.)+\)))?/, true);
+    }
+    state.f = state.inline = inlineNormal;
+    return tokenTypes.linkHref + " url";
+  }
+
+  var mode = {
+    startState: function() {
+      return {
+        f: blockNormal,
+
+        prevLine: null,
+        thisLine: null,
+
+        block: blockNormal,
+        htmlState: null,
+        indentation: 0,
+
+        inline: inlineNormal,
+        text: handleText,
+
+        formatting: false,
+        linkText: false,
+        linkHref: false,
+        linkTitle: false,
+        code: 0,
+        em: false,
+        strong: false,
+        header: 0,
+        hr: false,
+        taskList: false,
+        list: false,
+        listStack: [],
+        quote: 0,
+        trailingSpace: 0,
+        trailingSpaceNewLine: false,
+        strikethrough: false,
+        fencedChars: null
+      };
+    },
+
+    copyState: function(s) {
+      return {
+        f: s.f,
+
+        prevLine: s.prevLine,
+        thisLine: s.thisLine,
+
+        block: s.block,
+        htmlState: s.htmlState && CodeMirror.copyState(htmlMode, s.htmlState),
+        indentation: s.indentation,
+
+        localMode: s.localMode,
+        localState: s.localMode ? CodeMirror.copyState(s.localMode, s.localState) : null,
+
+        inline: s.inline,
+        text: s.text,
+        formatting: false,
+        linkText: s.linkText,
+        linkTitle: s.linkTitle,
+        code: s.code,
+        em: s.em,
+        strong: s.strong,
+        strikethrough: s.strikethrough,
+        header: s.header,
+        hr: s.hr,
+        taskList: s.taskList,
+        list: s.list,
+        listStack: s.listStack.slice(0),
+        quote: s.quote,
+        indentedCode: s.indentedCode,
+        trailingSpace: s.trailingSpace,
+        trailingSpaceNewLine: s.trailingSpaceNewLine,
+        md_inside: s.md_inside,
+        fencedChars: s.fencedChars
+      };
+    },
+
+    token: function(stream, state) {
+
+      // Reset state.formatting
+      state.formatting = false;
+
+      if (stream != state.thisLine) {
+        var forceBlankLine = state.header || state.hr;
+
+        // Reset state.header and state.hr
+        state.header = 0;
+        state.hr = false;
+
+        if (stream.match(/^\s*$/, true) || forceBlankLine) {
+          blankLine(state);
+          if (!forceBlankLine) return null
+          state.prevLine = null
+        }
+
+        state.prevLine = state.thisLine
+        state.thisLine = stream
+
+        // Reset state.taskList
+        state.taskList = false;
+
+        // Reset state.trailingSpace
+        state.trailingSpace = 0;
+        state.trailingSpaceNewLine = false;
+
+        state.f = state.block;
+        if (state.f != htmlBlock) {
+          var indentation = stream.match(/^\s*/, true)[0].replace(/\t/g, '    ').length;
+          state.indentationDiff = Math.min(indentation - state.indentation, 4);
+          state.indentation = state.indentation + state.indentationDiff;
+          if (indentation > 0) return null;
+        }
+      }
+      return state.f(stream, state);
+    },
+
+    innerMode: function(state) {
+      if (state.block == htmlBlock) return {state: state.htmlState, mode: htmlMode};
+      if (state.localState) return {state: state.localState, mode: state.localMode};
+      return {state: state, mode: mode};
+    },
+
+    indent: function(state, textAfter, line) {
+      if (state.block == htmlBlock) return htmlMode.indent(state.htmlState, textAfter, line)
+      if (state.localState) return state.localMode.indent(state.localState, textAfter, line)
+      return CodeMirror.Pass
+    },
+
+    blankLine: blankLine,
+
+    getType: getType,
+
+    closeBrackets: "()[]{}''\"\"``",
+    fold: "markdown"
+  };
+  return mode;
+}, "xml");
+
+CodeMirror.defineMIME("text/x-markdown", "markdown");
+
+});
+
+/*
+The MIT License (MIT)
+
+Copyright (c) 2015 Michael (https://github.com/mikethedj4)
+
+https://raw.githubusercontent.com/mikethedj4/html-lint-for-codemirror/gh-pages/LICENSE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+// CodeMirror HTMLHint Integration
+(function (mod) {
+	if (typeof exports == "object" && typeof module == "object") // CommonJS
+		mod(require("../../lib/codemirror"));
+	else if (typeof define == "function" && define.amd) // AMD
+		define(["../../lib/codemirror"], mod);
+	else // Plain browser env
+		mod(CodeMirror);
+})
+
+	(function (CodeMirror) {
+		"use strict";
+
+		CodeMirror.registerHelper("lint", "html", function (text) {
+			var found = [];
+			var message;
+			var parsed;
+
+			// return early
+			if (!window.HTMLHint) return found;
+			
+			// lint with HTMLHint
+			var messages = HTMLHint.verify(text, ruleSets);
+			for (var i = 0; i < messages.length; i++) {
+				message = messages[i];
+				var startLine = message.line - 1, endLine = message.line - 1, startCol = message.col - 1, endCol = message.col;
+				found.push({
+					from: CodeMirror.Pos(startLine, startCol),
+					to: CodeMirror.Pos(endLine, endCol),
+					message: message.message,
+					severity: message.type
+				});
+			}
+
+			// lint Handlebars syntax
+			console.log('here');
+			if (window.Handlebars && window.handlebarsErrorParser) {
+
+				console.log('here2');
+				try {
+					Handlebars.precompile(text);
+				} catch (e) {
+					parsed = window.handlebarsErrorParser(e);
+				}
+
+				if (parsed) {
+					found.push({
+						from: CodeMirror.Pos(parsed.startLine - 1, parsed.startColumn),
+						to: CodeMirror.Pos(parsed.endLine - 1, parsed.endColumn),
+						message: parsed.message,
+						severity: 'error' //warning or error
+					});
+				}
+			}
+
+			console.log('found:', found);
+
+			return found;
+		});
+	});
+
+// ruleSets for HTMLLint
+var ruleSets = {
+	"tagname-lowercase": true,
+	"attr-lowercase": true,
+	"attr-value-double-quotes": true,
+	"doctype-first": false,
+	"tag-pair": true,
+	"spec-char-escape": true,
+	"id-unique": true,
+	"src-not-empty": true,
+	"attr-no-duplication": true
+};
+
 /*!
  * HTMLHint v0.9.6
  * https://github.com/yaniswang/HTMLHint
@@ -15112,9265 +15403,6 @@ CodeMirror.registerGlobalHelper("fold", "comment", function(mode) {
  * MIT Licensed
  */
 var HTMLHint=function(e){var t={};return t.version="0.9.6",t.rules={},t.defaultRuleset={"tagname-lowercase":!0,"attr-lowercase":!0,"attr-value-double-quotes":!0,"doctype-first":!0,"tag-pair":!0,"spec-char-escape":!0,"id-unique":!0,"src-not-empty":!0,"attr-no-duplication":!0},t.addRule=function(e){t.rules[e.id]=e},t.verify=function(a,n){a=a.replace(/^\s*<!--\s*htmlhint\s+([^\r\n]+?)\s*-->/i,function(t,a){return n===e&&(n={}),a.replace(/(?:^|,)\s*([^:]+)\s*:\s*([^,\s]+)/g,function(e,t,a){"false"===a?a=!1:"true"===a&&(a=!0),n[t]=a}),""}),(n===e||0===Object.keys(n).length)&&(n=t.defaultRuleset);var i,r=new HTMLParser,s=new t.Reporter(a.split(/\r?\n/),n),o=t.rules;for(var l in n)i=o[l],i!==e&&n[l]!==!1&&i.init(r,s,n[l]);return r.parse(a),s.messages},t}();"object"==typeof exports&&exports&&(exports.HTMLHint=HTMLHint),function(e){var t=function(){var e=this;e._init.apply(e,arguments)};t.prototype={_init:function(e,t){var a=this;a.lines=e,a.ruleset=t,a.messages=[]},error:function(e,t,a,n,i){this.report("error",e,t,a,n,i)},warn:function(e,t,a,n,i){this.report("warning",e,t,a,n,i)},info:function(e,t,a,n,i){this.report("info",e,t,a,n,i)},report:function(e,t,a,n,i,r){var s=this;s.messages.push({type:e,message:t,raw:r,evidence:s.lines[a-1],line:a,col:n,rule:{id:i.id,description:i.description,link:"https://github.com/yaniswang/HTMLHint/wiki/"+i.id}})}},e.Reporter=t}(HTMLHint);var HTMLParser=function(e){var t=function(){var e=this;e._init.apply(e,arguments)};return t.prototype={_init:function(){var e=this;e._listeners={},e._mapCdataTags=e.makeMap("script,style"),e._arrBlocks=[]},makeMap:function(e){for(var t={},a=e.split(","),n=0;a.length>n;n++)t[a[n]]=!0;return t},parse:function(t){function a(t,a,n,i){var r=n-w+1;i===e&&(i={}),i.raw=a,i.pos=n,i.line=b,i.col=r,L.push(i),c.fire(t,i);for(var s;s=p.exec(a);)b++,w=n+p.lastIndex}var n,i,r,s,o,l,d,u,c=this,f=c._mapCdataTags,g=/<(?:\/([^\s>]+)\s*|!--([\s\S]*?)--|!([^>]*?)|([\w\-:]+)((?:\s+[\w\-:]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"']+))?)*?)\s*(\/?))>/g,m=/\s*([\w\-:]+)(?:\s*=\s*(?:(")([^"]*)"|(')([^']*)'|([^\s"']+)))?/g,p=/\r?\n/g,v=0,h=0,w=0,b=1,L=c._arrBlocks;for(c.fire("start",{pos:0,line:1,col:1});n=g.exec(t);)if(i=n.index,i>v&&(u=t.substring(v,i),o?d.push(u):a("text",u,v)),v=g.lastIndex,!(r=n[1])||(o&&r===o&&(u=d.join(""),a("cdata",u,h,{tagName:o,attrs:l}),o=null,l=null,d=null),o))if(o)d.push(n[0]);else if(r=n[4]){s=[];for(var H,y=n[5],T=0;H=m.exec(y);){var x=H[1],M=H[2]?H[2]:H[4]?H[4]:"",R=H[3]?H[3]:H[5]?H[5]:H[6]?H[6]:"";s.push({name:x,value:R,quote:M,index:H.index,raw:H[0]}),T+=H[0].length}T===y.length?(a("tagstart",n[0],i,{tagName:r,attrs:s,close:n[6]}),f[r]&&(o=r,l=s.concat(),d=[],h=v)):a("text",n[0],i)}else(n[2]||n[3])&&a("comment",n[0],i,{content:n[2]||n[3],"long":n[2]?!0:!1});else a("tagend",n[0],i,{tagName:r});t.length>v&&(u=t.substring(v,t.length),a("text",u,v)),c.fire("end",{pos:v,line:b,col:v-w+1})},addListener:function(t,a){for(var n,i=this._listeners,r=t.split(/[,\s]/),s=0,o=r.length;o>s;s++)n=r[s],i[n]===e&&(i[n]=[]),i[n].push(a)},fire:function(t,a){a===e&&(a={}),a.type=t;var n=this,i=[],r=n._listeners[t],s=n._listeners.all;r!==e&&(i=i.concat(r)),s!==e&&(i=i.concat(s));for(var o=0,l=i.length;l>o;o++)i[o].call(n,a)},removeListener:function(t,a){var n=this._listeners[t];if(n!==e)for(var i=0,r=n.length;r>i;i++)if(n[i]===a){n.splice(i,1);break}},fixPos:function(e,t){var a,n=e.raw.substr(0,t),i=n.split(/\r?\n/),r=i.length-1,s=e.line;return r>0?(s+=r,a=i[r].length+1):a=e.col+t,{line:s,col:a}},getMapAttrs:function(e){for(var t,a={},n=0,i=e.length;i>n;n++)t=e[n],a[t.name]=t.value;return a}},t}();"object"==typeof exports&&exports&&(exports.HTMLParser=HTMLParser),HTMLHint.addRule({id:"attr-lowercase",description:"Attribute name must be lowercase.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i=e.attrs,r=e.col+e.tagName.length+1,s=0,o=i.length;o>s;s++){n=i[s];var l=n.name;l!==l.toLowerCase()&&t.error("Attribute name [ "+l+" ] must be lower case.",e.line,r+n.index,a,n.raw)}})}}),HTMLHint.addRule({id:"attr-no-duplication",description:"Attribute name can not been duplication.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i,r=e.attrs,s=e.col+e.tagName.length+1,o={},l=0,d=r.length;d>l;l++)n=r[l],i=n.name,o[i]===!0&&t.error("The name of attribute [ "+n.name+" ] been duplication.",e.line,s+n.index,a,n.raw),o[i]=!0})}}),HTMLHint.addRule({id:"attr-unsafe-chars",description:"Attribute value cant not use unsafe chars.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i=e.attrs,r=e.col+e.tagName.length+1,s=/[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/,o=0,l=i.length;l>o;o++)n=i[o],s.test(n.value)===!0&&t.warn("The value of attribute [ "+n.name+" ] cant not use unsafe chars.",e.line,r+n.index,a,n.raw)})}}),HTMLHint.addRule({id:"attr-value-double-quotes",description:"Attribute value must closed by double quotes.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i=e.attrs,r=e.col+e.tagName.length+1,s=0,o=i.length;o>s;s++)n=i[s],(""!==n.value&&'"'!==n.quote||""===n.value&&"'"===n.quote)&&t.error("The value of attribute [ "+n.name+" ] must closed by double quotes.",e.line,r+n.index,a,n.raw)})}}),HTMLHint.addRule({id:"attr-value-not-empty",description:"Attribute must set value.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i=e.attrs,r=e.col+e.tagName.length+1,s=0,o=i.length;o>s;s++)n=i[s],""===n.quote&&""===n.value&&t.warn("The attribute [ "+n.name+" ] must set value.",e.line,r+n.index,a,n.raw)})}}),HTMLHint.addRule({id:"csslint",description:"Scan css with csslint.",init:function(e,t,a){var n=this;e.addListener("cdata",function(e){if("style"===e.tagName.toLowerCase()){var i;if(i="object"==typeof exports&&require?require("csslint").CSSLint.verify:CSSLint.verify,void 0!==a){var r=e.line-1,s=e.col-1;try{var o=i(e.raw,a).messages;o.forEach(function(e){var a=e.line;t["warning"===e.type?"warn":"error"]("["+e.rule.id+"] "+e.message,r+a,(1===a?s:0)+e.col,n,e.evidence)})}catch(l){}}}})}}),HTMLHint.addRule({id:"doctype-first",description:"Doctype must be first.",init:function(e,t){var a=this,n=function(i){"start"===i.type||"text"===i.type&&/^\s*$/.test(i.raw)||(("comment"!==i.type&&i.long===!1||/^DOCTYPE\s+/i.test(i.content)===!1)&&t.error("Doctype must be first.",i.line,i.col,a,i.raw),e.removeListener("all",n))};e.addListener("all",n)}}),HTMLHint.addRule({id:"doctype-html5",description:"Doctype must be html5.",init:function(e,t){function a(e){e.long===!1&&"doctype html"!==e.content.toLowerCase()&&t.warn("Doctype must be html5.",e.line,e.col,i,e.raw)}function n(){e.removeListener("comment",a),e.removeListener("tagstart",n)}var i=this;e.addListener("all",a),e.addListener("tagstart",n)}}),HTMLHint.addRule({id:"head-script-disabled",description:"The script tag can not be used in head.",init:function(e,t){function a(e){"script"===e.tagName.toLowerCase()&&t.warn("The script tag can not be used in head.",e.line,e.col,i,e.raw)}function n(t){"head"===t.tagName.toLowerCase()&&(e.removeListener("tagstart",a),e.removeListener("tagstart",n))}var i=this;e.addListener("tagstart",a),e.addListener("tagend",n)}}),HTMLHint.addRule({id:"href-abs-or-rel",description:"Href must be absolute or relative.",init:function(e,t,a){var n=this,i="abs"===a?"absolute":"relative";e.addListener("tagstart",function(e){for(var a,r=e.attrs,s=e.col+e.tagName.length+1,o=0,l=r.length;l>o;o++)if(a=r[o],"href"===a.name){("absolute"===i&&/^\w+?:/.test(a.value)===!1||"relative"===i&&/^https?:\/\//.test(a.value)===!0)&&t.warn("The value of href [ "+a.value+" ] must be "+i+".",e.line,s+a.index,n,a.raw);break}})}}),HTMLHint.addRule({id:"id-class-ad-disabled",description:"Id and class can not use ad keyword, it will blocked by adblock software.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i,r=e.attrs,s=e.col+e.tagName.length+1,o=0,l=r.length;l>o;o++)n=r[o],i=n.name,/^(id|class)$/i.test(i)&&/(^|[-\_])ad([-\_]|$)/i.test(n.value)&&t.warn("The value of "+i+" can not use ad keyword.",e.line,s+n.index,a,n.raw)})}}),HTMLHint.addRule({id:"id-class-value",description:"Id and class value must meet some rules.",init:function(e,t,a){var n,i=this,r={underline:{regId:/^[a-z\d]+(_[a-z\d]+)*$/,message:"Id and class value must lower case and split by underline."},dash:{regId:/^[a-z\d]+(-[a-z\d]+)*$/,message:"Id and class value must lower case and split by dash."},hump:{regId:/^[a-z][a-zA-Z\d]*([A-Z][a-zA-Z\d]*)*$/,message:"Id and class value must meet hump style."}};if(n="string"==typeof a?r[a]:a,n&&n.regId){var s=n.regId,o=n.message;e.addListener("tagstart",function(e){for(var a,n=e.attrs,r=e.col+e.tagName.length+1,l=0,d=n.length;d>l;l++)if(a=n[l],"id"===a.name.toLowerCase()&&s.test(a.value)===!1&&t.warn(o,e.line,r+a.index,i,a.raw),"class"===a.name.toLowerCase())for(var u,c=a.value.split(/\s+/g),f=0,g=c.length;g>f;f++)u=c[f],u&&s.test(u)===!1&&t.warn(o,e.line,r+a.index,i,u)})}}}),HTMLHint.addRule({id:"id-unique",description:"Id must be unique.",init:function(e,t){var a=this,n={};e.addListener("tagstart",function(e){for(var i,r,s=e.attrs,o=e.col+e.tagName.length+1,l=0,d=s.length;d>l;l++)if(i=s[l],"id"===i.name.toLowerCase()){r=i.value,r&&(void 0===n[r]?n[r]=1:n[r]++,n[r]>1&&t.error("Id redefinition of [ "+r+" ].",e.line,o+i.index,a,i.raw));break}})}}),HTMLHint.addRule({id:"img-alt-require",description:"Alt of img tag must be set value.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){if("img"===e.tagName.toLowerCase()){for(var n=e.attrs,i=!1,r=0,s=n.length;s>r;r++)if("alt"===n[r].name.toLowerCase()){i=!0;break}i===!1&&t.warn("Alt of img tag must be set value.",e.line,e.col,a,e.raw)}})}}),HTMLHint.addRule({id:"jshint",description:"Scan script with jshint.",init:function(e,t,a){var n=this;e.addListener("cdata",function(i){if("script"===i.tagName.toLowerCase()){var r=e.getMapAttrs(i.attrs),s=r.type;if(void 0!==r.src||s&&/^(text\/javascript)$/i.test(s)===!1)return;var o;if(o="object"==typeof exports&&require?require("jshint").JSHINT:JSHINT,void 0!==a){var l=i.line-1,d=i.col-1,u=i.raw.replace(/\t/g," ");try{var c=o(u,a);c===!1&&o.errors.forEach(function(e){var a=e.line;t.warn(e.reason,l+a,(1===a?d:0)+e.character,n,e.evidence)})}catch(f){}}}})}}),HTMLHint.addRule({id:"space-tab-mixed-disabled",description:"Spaces and tabs can not mixed in front of line.",init:function(e,t){var a=this;e.addListener("text",function(n){for(var i,r=n.raw,s=/(^|\r?\n)( +\t|\t+ )/g;i=s.exec(r);){var o=e.fixPos(n,i.index+i[1].length);t.warn("Mixed spaces and tabs in front of line.",o.line,1,a,n.raw)}})}}),HTMLHint.addRule({id:"spec-char-escape",description:"Special characters must be escaped.",init:function(e,t){var a=this;e.addListener("text",function(n){for(var i,r=n.raw,s=/[<>]/g;i=s.exec(r);){var o=e.fixPos(n,i.index);t.error("Special characters must be escaped : [ "+i[0]+" ].",o.line,o.col,a,n.raw)}})}}),HTMLHint.addRule({id:"src-not-empty",description:"Src of img(script,link) must set value.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){for(var n,i=e.tagName,r=e.attrs,s=e.col+i.length+1,o=0,l=r.length;l>o;o++)n=r[o],(/^(img|script|embed|bgsound|iframe)$/.test(i)===!0&&"src"===n.name||"link"===i&&"href"===n.name||"object"===i&&"data"===n.name)&&""===n.value&&t.error("[ "+n.name+"] of [ "+i+" ] must set value.",e.line,s+n.index,a,n.raw)})}}),HTMLHint.addRule({id:"style-disabled",description:"Style tag can not be use.",init:function(e,t){var a=this;e.addListener("tagstart",function(e){"style"===e.tagName.toLowerCase()&&t.warn("Style tag can not be use.",e.line,e.col,a,e.raw)})}}),HTMLHint.addRule({id:"tag-pair",description:"Tag must be paired.",init:function(e,t){var a=this,n=[],i=e.makeMap("area,base,basefont,br,col,frame,hr,img,input,isindex,link,meta,param,embed");e.addListener("tagstart",function(e){var t=e.tagName.toLowerCase();void 0!==i[t]||e.close||n.push(t)}),e.addListener("tagend",function(e){for(var i=e.tagName.toLowerCase(),r=n.length-1;r>=0&&n[r]!==i;r--);if(r>=0){for(var s=[],o=n.length-1;o>r;o--)s.push("</"+n[o]+">");s.length>0&&t.error("Tag must be paired, Missing: [ "+s.join("")+" ]",e.line,e.col,a,e.raw),n.length=r}else t.error("Tag must be paired, No start tag: [ "+e.raw+" ]",e.line,e.col,a,e.raw)}),e.addListener("end",function(e){for(var i=[],r=n.length-1;r>=0;r--)i.push("</"+n[r]+">");i.length>0&&t.error("Tag must be paired, Missing: [ "+i.join("")+" ]",e.line,e.col,a,"")})}}),HTMLHint.addRule({id:"tag-self-close",description:"The empty tag must closed by self.",init:function(e,t){var a=this,n=e.makeMap("area,base,basefont,br,col,frame,hr,img,input,isindex,link,meta,param,embed");e.addListener("tagstart",function(e){var i=e.tagName.toLowerCase();void 0!==n[i]&&(e.close||t.warn("The empty tag : [ "+i+" ] must closed by self.",e.line,e.col,a,e.raw))})}}),HTMLHint.addRule({id:"tagname-lowercase",description:"Tagname must be lowercase.",init:function(e,t){var a=this;e.addListener("tagstart,tagend",function(e){var n=e.tagName;n!==n.toLowerCase()&&t.error("Tagname [ "+n+" ] must be lower case.",e.line,e.col,a,e.raw)})}});
-/*!
-CSSLint
-Copyright (c) 2013 Nicole Sullivan and Nicholas C. Zakas. All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-*/
-/* Build: v0.10.0 15-August-2013 01:07:22 */
-var exports = exports || {};
-var CSSLint = (function(){
-/*!
-Parser-Lib
-Copyright (c) 2009-2011 Nicholas C. Zakas. All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-*/
-/* Version v0.2.3, Build time: 19-June-2013 11:16:15 */
-var parserlib = {};
-(function(){
-
-
-/**
- * A generic base to inherit from for any object
- * that needs event handling.
- * @class EventTarget
- * @constructor
- */
-function EventTarget(){
-
-    /**
-     * The array of listeners for various events.
-     * @type Object
-     * @property _listeners
-     * @private
-     */
-    this._listeners = {};
-}
-
-EventTarget.prototype = {
-
-    //restore constructor
-    constructor: EventTarget,
-
-    /**
-     * Adds a listener for a given event type.
-     * @param {String} type The type of event to add a listener for.
-     * @param {Function} listener The function to call when the event occurs.
-     * @return {void}
-     * @method addListener
-     */
-    addListener: function(type, listener){
-        if (!this._listeners[type]){
-            this._listeners[type] = [];
-        }
-
-        this._listeners[type].push(listener);
-    },
-
-    /**
-     * Fires an event based on the passed-in object.
-     * @param {Object|String} event An object with at least a 'type' attribute
-     *      or a string indicating the event name.
-     * @return {void}
-     * @method fire
-     */
-    fire: function(event){
-        if (typeof event == "string"){
-            event = { type: event };
-        }
-        if (typeof event.target != "undefined"){
-            event.target = this;
-        }
-
-        if (typeof event.type == "undefined"){
-            throw new Error("Event object missing 'type' property.");
-        }
-
-        if (this._listeners[event.type]){
-
-            //create a copy of the array and use that so listeners can't chane
-            var listeners = this._listeners[event.type].concat();
-            for (var i=0, len=listeners.length; i < len; i++){
-                listeners[i].call(this, event);
-            }
-        }
-    },
-
-    /**
-     * Removes a listener for a given event type.
-     * @param {String} type The type of event to remove a listener from.
-     * @param {Function} listener The function to remove from the event.
-     * @return {void}
-     * @method removeListener
-     */
-    removeListener: function(type, listener){
-        if (this._listeners[type]){
-            var listeners = this._listeners[type];
-            for (var i=0, len=listeners.length; i < len; i++){
-                if (listeners[i] === listener){
-                    listeners.splice(i, 1);
-                    break;
-                }
-            }
-
-
-        }
-    }
-};
-/**
- * Convenient way to read through strings.
- * @namespace parserlib.util
- * @class StringReader
- * @constructor
- * @param {String} text The text to read.
- */
-function StringReader(text){
-
-    /**
-     * The input text with line endings normalized.
-     * @property _input
-     * @type String
-     * @private
-     */
-    this._input = text.replace(/\n\r?/g, "\n");
-
-
-    /**
-     * The row for the character to be read next.
-     * @property _line
-     * @type int
-     * @private
-     */
-    this._line = 1;
-
-
-    /**
-     * The column for the character to be read next.
-     * @property _col
-     * @type int
-     * @private
-     */
-    this._col = 1;
-
-    /**
-     * The index of the character in the input to be read next.
-     * @property _cursor
-     * @type int
-     * @private
-     */
-    this._cursor = 0;
-}
-
-StringReader.prototype = {
-
-    //restore constructor
-    constructor: StringReader,
-
-    //-------------------------------------------------------------------------
-    // Position info
-    //-------------------------------------------------------------------------
-
-    /**
-     * Returns the column of the character to be read next.
-     * @return {int} The column of the character to be read next.
-     * @method getCol
-     */
-    getCol: function(){
-        return this._col;
-    },
-
-    /**
-     * Returns the row of the character to be read next.
-     * @return {int} The row of the character to be read next.
-     * @method getLine
-     */
-    getLine: function(){
-        return this._line ;
-    },
-
-    /**
-     * Determines if you're at the end of the input.
-     * @return {Boolean} True if there's no more input, false otherwise.
-     * @method eof
-     */
-    eof: function(){
-        return (this._cursor == this._input.length);
-    },
-
-    //-------------------------------------------------------------------------
-    // Basic reading
-    //-------------------------------------------------------------------------
-
-    /**
-     * Reads the next character without advancing the cursor.
-     * @param {int} count How many characters to look ahead (default is 1).
-     * @return {String} The next character or null if there is no next character.
-     * @method peek
-     */
-    peek: function(count){
-        var c = null;
-        count = (typeof count == "undefined" ? 1 : count);
-
-        //if we're not at the end of the input...
-        if (this._cursor < this._input.length){
-
-            //get character and increment cursor and column
-            c = this._input.charAt(this._cursor + count - 1);
-        }
-
-        return c;
-    },
-
-    /**
-     * Reads the next character from the input and adjusts the row and column
-     * accordingly.
-     * @return {String} The next character or null if there is no next character.
-     * @method read
-     */
-    read: function(){
-        var c = null;
-
-        //if we're not at the end of the input...
-        if (this._cursor < this._input.length){
-
-            //if the last character was a newline, increment row count
-            //and reset column count
-            if (this._input.charAt(this._cursor) == "\n"){
-                this._line++;
-                this._col=1;
-            } else {
-                this._col++;
-            }
-
-            //get character and increment cursor and column
-            c = this._input.charAt(this._cursor++);
-        }
-
-        return c;
-    },
-
-    //-------------------------------------------------------------------------
-    // Misc
-    //-------------------------------------------------------------------------
-
-    /**
-     * Saves the current location so it can be returned to later.
-     * @method mark
-     * @return {void}
-     */
-    mark: function(){
-        this._bookmark = {
-            cursor: this._cursor,
-            line:   this._line,
-            col:    this._col
-        };
-    },
-
-    reset: function(){
-        if (this._bookmark){
-            this._cursor = this._bookmark.cursor;
-            this._line = this._bookmark.line;
-            this._col = this._bookmark.col;
-            delete this._bookmark;
-        }
-    },
-
-    //-------------------------------------------------------------------------
-    // Advanced reading
-    //-------------------------------------------------------------------------
-
-    /**
-     * Reads up to and including the given string. Throws an error if that
-     * string is not found.
-     * @param {String} pattern The string to read.
-     * @return {String} The string when it is found.
-     * @throws Error when the string pattern is not found.
-     * @method readTo
-     */
-    readTo: function(pattern){
-
-        var buffer = "",
-            c;
-
-        /*
-         * First, buffer must be the same length as the pattern.
-         * Then, buffer must end with the pattern or else reach the
-         * end of the input.
-         */
-        while (buffer.length < pattern.length || buffer.lastIndexOf(pattern) != buffer.length - pattern.length){
-            c = this.read();
-            if (c){
-                buffer += c;
-            } else {
-                throw new Error("Expected \"" + pattern + "\" at line " + this._line  + ", col " + this._col + ".");
-            }
-        }
-
-        return buffer;
-
-    },
-
-    /**
-     * Reads characters while each character causes the given
-     * filter function to return true. The function is passed
-     * in each character and either returns true to continue
-     * reading or false to stop.
-     * @param {Function} filter The function to read on each character.
-     * @return {String} The string made up of all characters that passed the
-     *      filter check.
-     * @method readWhile
-     */
-    readWhile: function(filter){
-
-        var buffer = "",
-            c = this.read();
-
-        while(c !== null && filter(c)){
-            buffer += c;
-            c = this.read();
-        }
-
-        return buffer;
-
-    },
-
-    /**
-     * Reads characters that match either text or a regular expression and
-     * returns those characters. If a match is found, the row and column
-     * are adjusted; if no match is found, the reader's state is unchanged.
-     * reading or false to stop.
-     * @param {String|RegExp} matchter If a string, then the literal string
-     *      value is searched for. If a regular expression, then any string
-     *      matching the pattern is search for.
-     * @return {String} The string made up of all characters that matched or
-     *      null if there was no match.
-     * @method readMatch
-     */
-    readMatch: function(matcher){
-
-        var source = this._input.substring(this._cursor),
-            value = null;
-
-        //if it's a string, just do a straight match
-        if (typeof matcher == "string"){
-            if (source.indexOf(matcher) === 0){
-                value = this.readCount(matcher.length);
-            }
-        } else if (matcher instanceof RegExp){
-            if (matcher.test(source)){
-                value = this.readCount(RegExp.lastMatch.length);
-            }
-        }
-
-        return value;
-    },
-
-
-    /**
-     * Reads a given number of characters. If the end of the input is reached,
-     * it reads only the remaining characters and does not throw an error.
-     * @param {int} count The number of characters to read.
-     * @return {String} The string made up the read characters.
-     * @method readCount
-     */
-    readCount: function(count){
-        var buffer = "";
-
-        while(count--){
-            buffer += this.read();
-        }
-
-        return buffer;
-    }
-
-};
-/**
- * Type to use when a syntax error occurs.
- * @class SyntaxError
- * @namespace parserlib.util
- * @constructor
- * @param {String} message The error message.
- * @param {int} line The line at which the error occurred.
- * @param {int} col The column at which the error occurred.
- */
-function SyntaxError(message, line, col){
-
-    /**
-     * The column at which the error occurred.
-     * @type int
-     * @property col
-     */
-    this.col = col;
-
-    /**
-     * The line at which the error occurred.
-     * @type int
-     * @property line
-     */
-    this.line = line;
-
-    /**
-     * The text representation of the unit.
-     * @type String
-     * @property text
-     */
-    this.message = message;
-
-}
-
-//inherit from Error
-SyntaxError.prototype = new Error();
-/**
- * Base type to represent a single syntactic unit.
- * @class SyntaxUnit
- * @namespace parserlib.util
- * @constructor
- * @param {String} text The text of the unit.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function SyntaxUnit(text, line, col, type){
-
-
-    /**
-     * The column of text on which the unit resides.
-     * @type int
-     * @property col
-     */
-    this.col = col;
-
-    /**
-     * The line of text on which the unit resides.
-     * @type int
-     * @property line
-     */
-    this.line = line;
-
-    /**
-     * The text representation of the unit.
-     * @type String
-     * @property text
-     */
-    this.text = text;
-
-    /**
-     * The type of syntax unit.
-     * @type int
-     * @property type
-     */
-    this.type = type;
-}
-
-/**
- * Create a new syntax unit based solely on the given token.
- * Convenience method for creating a new syntax unit when
- * it represents a single token instead of multiple.
- * @param {Object} token The token object to represent.
- * @return {parserlib.util.SyntaxUnit} The object representing the token.
- * @static
- * @method fromToken
- */
-SyntaxUnit.fromToken = function(token){
-    return new SyntaxUnit(token.value, token.startLine, token.startCol);
-};
-
-SyntaxUnit.prototype = {
-
-    //restore constructor
-    constructor: SyntaxUnit,
-
-    /**
-     * Returns the text representation of the unit.
-     * @return {String} The text representation of the unit.
-     * @method valueOf
-     */
-    valueOf: function(){
-        return this.toString();
-    },
-
-    /**
-     * Returns the text representation of the unit.
-     * @return {String} The text representation of the unit.
-     * @method toString
-     */
-    toString: function(){
-        return this.text;
-    }
-
-};
-/*global StringReader, SyntaxError*/
-
-/**
- * Generic TokenStream providing base functionality.
- * @class TokenStreamBase
- * @namespace parserlib.util
- * @constructor
- * @param {String|StringReader} input The text to tokenize or a reader from
- *      which to read the input.
- */
-function TokenStreamBase(input, tokenData){
-
-    /**
-     * The string reader for easy access to the text.
-     * @type StringReader
-     * @property _reader
-     * @private
-     */
-    this._reader = input ? new StringReader(input.toString()) : null;
-
-    /**
-     * Token object for the last consumed token.
-     * @type Token
-     * @property _token
-     * @private
-     */
-    this._token = null;
-
-    /**
-     * The array of token information.
-     * @type Array
-     * @property _tokenData
-     * @private
-     */
-    this._tokenData = tokenData;
-
-    /**
-     * Lookahead token buffer.
-     * @type Array
-     * @property _lt
-     * @private
-     */
-    this._lt = [];
-
-    /**
-     * Lookahead token buffer index.
-     * @type int
-     * @property _ltIndex
-     * @private
-     */
-    this._ltIndex = 0;
-
-    this._ltIndexCache = [];
-}
-
-/**
- * Accepts an array of token information and outputs
- * an array of token data containing key-value mappings
- * and matching functions that the TokenStream needs.
- * @param {Array} tokens An array of token descriptors.
- * @return {Array} An array of processed token data.
- * @method createTokenData
- * @static
- */
-TokenStreamBase.createTokenData = function(tokens){
-
-    var nameMap     = [],
-        typeMap     = {},
-        tokenData     = tokens.concat([]),
-        i            = 0,
-        len            = tokenData.length+1;
-
-    tokenData.UNKNOWN = -1;
-    tokenData.unshift({name:"EOF"});
-
-    for (; i < len; i++){
-        nameMap.push(tokenData[i].name);
-        tokenData[tokenData[i].name] = i;
-        if (tokenData[i].text){
-            typeMap[tokenData[i].text] = i;
-        }
-    }
-
-    tokenData.name = function(tt){
-        return nameMap[tt];
-    };
-
-    tokenData.type = function(c){
-        return typeMap[c];
-    };
-
-    return tokenData;
-};
-
-TokenStreamBase.prototype = {
-
-    //restore constructor
-    constructor: TokenStreamBase,
-
-    //-------------------------------------------------------------------------
-    // Matching methods
-    //-------------------------------------------------------------------------
-
-    /**
-     * Determines if the next token matches the given token type.
-     * If so, that token is consumed; if not, the token is placed
-     * back onto the token stream. You can pass in any number of
-     * token types and this will return true if any of the token
-     * types is found.
-     * @param {int|int[]} tokenTypes Either a single token type or an array of
-     *      token types that the next token might be. If an array is passed,
-     *      it's assumed that the token can be any of these.
-     * @param {variant} channel (Optional) The channel to read from. If not
-     *      provided, reads from the default (unnamed) channel.
-     * @return {Boolean} True if the token type matches, false if not.
-     * @method match
-     */
-    match: function(tokenTypes, channel){
-
-        //always convert to an array, makes things easier
-        if (!(tokenTypes instanceof Array)){
-            tokenTypes = [tokenTypes];
-        }
-
-        var tt  = this.get(channel),
-            i   = 0,
-            len = tokenTypes.length;
-
-        while(i < len){
-            if (tt == tokenTypes[i++]){
-                return true;
-            }
-        }
-
-        //no match found, put the token back
-        this.unget();
-        return false;
-    },
-
-    /**
-     * Determines if the next token matches the given token type.
-     * If so, that token is consumed; if not, an error is thrown.
-     * @param {int|int[]} tokenTypes Either a single token type or an array of
-     *      token types that the next token should be. If an array is passed,
-     *      it's assumed that the token must be one of these.
-     * @param {variant} channel (Optional) The channel to read from. If not
-     *      provided, reads from the default (unnamed) channel.
-     * @return {void}
-     * @method mustMatch
-     */
-    mustMatch: function(tokenTypes, channel){
-
-        var token;
-
-        //always convert to an array, makes things easier
-        if (!(tokenTypes instanceof Array)){
-            tokenTypes = [tokenTypes];
-        }
-
-        if (!this.match.apply(this, arguments)){
-            token = this.LT(1);
-            throw new SyntaxError("Expected " + this._tokenData[tokenTypes[0]].name +
-                " at line " + token.startLine + ", col " + token.startCol + ".", token.startLine, token.startCol);
-        }
-    },
-
-    //-------------------------------------------------------------------------
-    // Consuming methods
-    //-------------------------------------------------------------------------
-
-    /**
-     * Keeps reading from the token stream until either one of the specified
-     * token types is found or until the end of the input is reached.
-     * @param {int|int[]} tokenTypes Either a single token type or an array of
-     *      token types that the next token should be. If an array is passed,
-     *      it's assumed that the token must be one of these.
-     * @param {variant} channel (Optional) The channel to read from. If not
-     *      provided, reads from the default (unnamed) channel.
-     * @return {void}
-     * @method advance
-     */
-    advance: function(tokenTypes, channel){
-
-        while(this.LA(0) !== 0 && !this.match(tokenTypes, channel)){
-            this.get();
-        }
-
-        return this.LA(0);
-    },
-
-    /**
-     * Consumes the next token from the token stream.
-     * @return {int} The token type of the token that was just consumed.
-     * @method get
-     */
-    get: function(channel){
-
-        var tokenInfo   = this._tokenData,
-            reader      = this._reader,
-            value,
-            i           =0,
-            len         = tokenInfo.length,
-            found       = false,
-            token,
-            info;
-
-        //check the lookahead buffer first
-        if (this._lt.length && this._ltIndex >= 0 && this._ltIndex < this._lt.length){
-
-            i++;
-            this._token = this._lt[this._ltIndex++];
-            info = tokenInfo[this._token.type];
-
-            //obey channels logic
-            while((info.channel !== undefined && channel !== info.channel) &&
-                    this._ltIndex < this._lt.length){
-                this._token = this._lt[this._ltIndex++];
-                info = tokenInfo[this._token.type];
-                i++;
-            }
-
-            //here be dragons
-            if ((info.channel === undefined || channel === info.channel) &&
-                    this._ltIndex <= this._lt.length){
-                this._ltIndexCache.push(i);
-                return this._token.type;
-            }
-        }
-
-        //call token retriever method
-        token = this._getToken();
-
-        //if it should be hidden, don't save a token
-        if (token.type > -1 && !tokenInfo[token.type].hide){
-
-            //apply token channel
-            token.channel = tokenInfo[token.type].channel;
-
-            //save for later
-            this._token = token;
-            this._lt.push(token);
-
-            //save space that will be moved (must be done before array is truncated)
-            this._ltIndexCache.push(this._lt.length - this._ltIndex + i);
-
-            //keep the buffer under 5 items
-            if (this._lt.length > 5){
-                this._lt.shift();
-            }
-
-            //also keep the shift buffer under 5 items
-            if (this._ltIndexCache.length > 5){
-                this._ltIndexCache.shift();
-            }
-
-            //update lookahead index
-            this._ltIndex = this._lt.length;
-        }
-
-        /*
-         * Skip to the next token if:
-         * 1. The token type is marked as hidden.
-         * 2. The token type has a channel specified and it isn't the current channel.
-         */
-        info = tokenInfo[token.type];
-        if (info &&
-                (info.hide ||
-                (info.channel !== undefined && channel !== info.channel))){
-            return this.get(channel);
-        } else {
-            //return just the type
-            return token.type;
-        }
-    },
-
-    /**
-     * Looks ahead a certain number of tokens and returns the token type at
-     * that position. This will throw an error if you lookahead past the
-     * end of input, past the size of the lookahead buffer, or back past
-     * the first token in the lookahead buffer.
-     * @param {int} The index of the token type to retrieve. 0 for the
-     *      current token, 1 for the next, -1 for the previous, etc.
-     * @return {int} The token type of the token in the given position.
-     * @method LA
-     */
-    LA: function(index){
-        var total = index,
-            tt;
-        if (index > 0){
-            //TODO: Store 5 somewhere
-            if (index > 5){
-                throw new Error("Too much lookahead.");
-            }
-
-            //get all those tokens
-            while(total){
-                tt = this.get();
-                total--;
-            }
-
-            //unget all those tokens
-            while(total < index){
-                this.unget();
-                total++;
-            }
-        } else if (index < 0){
-
-            if(this._lt[this._ltIndex+index]){
-                tt = this._lt[this._ltIndex+index].type;
-            } else {
-                throw new Error("Too much lookbehind.");
-            }
-
-        } else {
-            tt = this._token.type;
-        }
-
-        return tt;
-
-    },
-
-    /**
-     * Looks ahead a certain number of tokens and returns the token at
-     * that position. This will throw an error if you lookahead past the
-     * end of input, past the size of the lookahead buffer, or back past
-     * the first token in the lookahead buffer.
-     * @param {int} The index of the token type to retrieve. 0 for the
-     *      current token, 1 for the next, -1 for the previous, etc.
-     * @return {Object} The token of the token in the given position.
-     * @method LA
-     */
-    LT: function(index){
-
-        //lookahead first to prime the token buffer
-        this.LA(index);
-
-        //now find the token, subtract one because _ltIndex is already at the next index
-        return this._lt[this._ltIndex+index-1];
-    },
-
-    /**
-     * Returns the token type for the next token in the stream without
-     * consuming it.
-     * @return {int} The token type of the next token in the stream.
-     * @method peek
-     */
-    peek: function(){
-        return this.LA(1);
-    },
-
-    /**
-     * Returns the actual token object for the last consumed token.
-     * @return {Token} The token object for the last consumed token.
-     * @method token
-     */
-    token: function(){
-        return this._token;
-    },
-
-    /**
-     * Returns the name of the token for the given token type.
-     * @param {int} tokenType The type of token to get the name of.
-     * @return {String} The name of the token or "UNKNOWN_TOKEN" for any
-     *      invalid token type.
-     * @method tokenName
-     */
-    tokenName: function(tokenType){
-        if (tokenType < 0 || tokenType > this._tokenData.length){
-            return "UNKNOWN_TOKEN";
-        } else {
-            return this._tokenData[tokenType].name;
-        }
-    },
-
-    /**
-     * Returns the token type value for the given token name.
-     * @param {String} tokenName The name of the token whose value should be returned.
-     * @return {int} The token type value for the given token name or -1
-     *      for an unknown token.
-     * @method tokenName
-     */
-    tokenType: function(tokenName){
-        return this._tokenData[tokenName] || -1;
-    },
-
-    /**
-     * Returns the last consumed token to the token stream.
-     * @method unget
-     */
-    unget: function(){
-        //if (this._ltIndex > -1){
-        if (this._ltIndexCache.length){
-            this._ltIndex -= this._ltIndexCache.pop();//--;
-            this._token = this._lt[this._ltIndex - 1];
-        } else {
-            throw new Error("Too much lookahead.");
-        }
-    }
-
-};
-
-
-
-
-parserlib.util = {
-StringReader: StringReader,
-SyntaxError : SyntaxError,
-SyntaxUnit  : SyntaxUnit,
-EventTarget : EventTarget,
-TokenStreamBase : TokenStreamBase
-};
-})();
-
-
-/*
-Parser-Lib
-Copyright (c) 2009-2011 Nicholas C. Zakas. All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-*/
-/* Version v0.2.3, Build time: 19-June-2013 11:16:15 */
-(function(){
-var EventTarget = parserlib.util.EventTarget,
-TokenStreamBase = parserlib.util.TokenStreamBase,
-StringReader = parserlib.util.StringReader,
-SyntaxError = parserlib.util.SyntaxError,
-SyntaxUnit  = parserlib.util.SyntaxUnit;
-
-
-var Colors = {
-    aliceblue       :"#f0f8ff",
-    antiquewhite    :"#faebd7",
-    aqua            :"#00ffff",
-    aquamarine      :"#7fffd4",
-    azure           :"#f0ffff",
-    beige           :"#f5f5dc",
-    bisque          :"#ffe4c4",
-    black           :"#000000",
-    blanchedalmond  :"#ffebcd",
-    blue            :"#0000ff",
-    blueviolet      :"#8a2be2",
-    brown           :"#a52a2a",
-    burlywood       :"#deb887",
-    cadetblue       :"#5f9ea0",
-    chartreuse      :"#7fff00",
-    chocolate       :"#d2691e",
-    coral           :"#ff7f50",
-    cornflowerblue  :"#6495ed",
-    cornsilk        :"#fff8dc",
-    crimson         :"#dc143c",
-    cyan            :"#00ffff",
-    darkblue        :"#00008b",
-    darkcyan        :"#008b8b",
-    darkgoldenrod   :"#b8860b",
-    darkgray        :"#a9a9a9",
-    darkgreen       :"#006400",
-    darkkhaki       :"#bdb76b",
-    darkmagenta     :"#8b008b",
-    darkolivegreen  :"#556b2f",
-    darkorange      :"#ff8c00",
-    darkorchid      :"#9932cc",
-    darkred         :"#8b0000",
-    darksalmon      :"#e9967a",
-    darkseagreen    :"#8fbc8f",
-    darkslateblue   :"#483d8b",
-    darkslategray   :"#2f4f4f",
-    darkturquoise   :"#00ced1",
-    darkviolet      :"#9400d3",
-    deeppink        :"#ff1493",
-    deepskyblue     :"#00bfff",
-    dimgray         :"#696969",
-    dodgerblue      :"#1e90ff",
-    firebrick       :"#b22222",
-    floralwhite     :"#fffaf0",
-    forestgreen     :"#228b22",
-    fuchsia         :"#ff00ff",
-    gainsboro       :"#dcdcdc",
-    ghostwhite      :"#f8f8ff",
-    gold            :"#ffd700",
-    goldenrod       :"#daa520",
-    gray            :"#808080",
-    green           :"#008000",
-    greenyellow     :"#adff2f",
-    honeydew        :"#f0fff0",
-    hotpink         :"#ff69b4",
-    indianred       :"#cd5c5c",
-    indigo          :"#4b0082",
-    ivory           :"#fffff0",
-    khaki           :"#f0e68c",
-    lavender        :"#e6e6fa",
-    lavenderblush   :"#fff0f5",
-    lawngreen       :"#7cfc00",
-    lemonchiffon    :"#fffacd",
-    lightblue       :"#add8e6",
-    lightcoral      :"#f08080",
-    lightcyan       :"#e0ffff",
-    lightgoldenrodyellow  :"#fafad2",
-    lightgray       :"#d3d3d3",
-    lightgreen      :"#90ee90",
-    lightpink       :"#ffb6c1",
-    lightsalmon     :"#ffa07a",
-    lightseagreen   :"#20b2aa",
-    lightskyblue    :"#87cefa",
-    lightslategray  :"#778899",
-    lightsteelblue  :"#b0c4de",
-    lightyellow     :"#ffffe0",
-    lime            :"#00ff00",
-    limegreen       :"#32cd32",
-    linen           :"#faf0e6",
-    magenta         :"#ff00ff",
-    maroon          :"#800000",
-    mediumaquamarine:"#66cdaa",
-    mediumblue      :"#0000cd",
-    mediumorchid    :"#ba55d3",
-    mediumpurple    :"#9370d8",
-    mediumseagreen  :"#3cb371",
-    mediumslateblue :"#7b68ee",
-    mediumspringgreen   :"#00fa9a",
-    mediumturquoise :"#48d1cc",
-    mediumvioletred :"#c71585",
-    midnightblue    :"#191970",
-    mintcream       :"#f5fffa",
-    mistyrose       :"#ffe4e1",
-    moccasin        :"#ffe4b5",
-    navajowhite     :"#ffdead",
-    navy            :"#000080",
-    oldlace         :"#fdf5e6",
-    olive           :"#808000",
-    olivedrab       :"#6b8e23",
-    orange          :"#ffa500",
-    orangered       :"#ff4500",
-    orchid          :"#da70d6",
-    palegoldenrod   :"#eee8aa",
-    palegreen       :"#98fb98",
-    paleturquoise   :"#afeeee",
-    palevioletred   :"#d87093",
-    papayawhip      :"#ffefd5",
-    peachpuff       :"#ffdab9",
-    peru            :"#cd853f",
-    pink            :"#ffc0cb",
-    plum            :"#dda0dd",
-    powderblue      :"#b0e0e6",
-    purple          :"#800080",
-    red             :"#ff0000",
-    rosybrown       :"#bc8f8f",
-    royalblue       :"#4169e1",
-    saddlebrown     :"#8b4513",
-    salmon          :"#fa8072",
-    sandybrown      :"#f4a460",
-    seagreen        :"#2e8b57",
-    seashell        :"#fff5ee",
-    sienna          :"#a0522d",
-    silver          :"#c0c0c0",
-    skyblue         :"#87ceeb",
-    slateblue       :"#6a5acd",
-    slategray       :"#708090",
-    snow            :"#fffafa",
-    springgreen     :"#00ff7f",
-    steelblue       :"#4682b4",
-    tan             :"#d2b48c",
-    teal            :"#008080",
-    thistle         :"#d8bfd8",
-    tomato          :"#ff6347",
-    turquoise       :"#40e0d0",
-    violet          :"#ee82ee",
-    wheat           :"#f5deb3",
-    white           :"#ffffff",
-    whitesmoke      :"#f5f5f5",
-    yellow          :"#ffff00",
-    yellowgreen     :"#9acd32",
-    //CSS2 system colors http://www.w3.org/TR/css3-color/#css2-system
-    activeBorder        :"Active window border.",
-    activecaption       :"Active window caption.",
-    appworkspace        :"Background color of multiple document interface.",
-    background          :"Desktop background.",
-    buttonface          :"The face background color for 3-D elements that appear 3-D due to one layer of surrounding border.",
-    buttonhighlight     :"The color of the border facing the light source for 3-D elements that appear 3-D due to one layer of surrounding border.",
-    buttonshadow        :"The color of the border away from the light source for 3-D elements that appear 3-D due to one layer of surrounding border.",
-    buttontext          :"Text on push buttons.",
-    captiontext         :"Text in caption, size box, and scrollbar arrow box.",
-    graytext            :"Grayed (disabled) text. This color is set to #000 if the current display driver does not support a solid gray color.",
-    highlight           :"Item(s) selected in a control.",
-    highlighttext       :"Text of item(s) selected in a control.",
-    inactiveborder      :"Inactive window border.",
-    inactivecaption     :"Inactive window caption.",
-    inactivecaptiontext :"Color of text in an inactive caption.",
-    infobackground      :"Background color for tooltip controls.",
-    infotext            :"Text color for tooltip controls.",
-    menu                :"Menu background.",
-    menutext            :"Text in menus.",
-    scrollbar           :"Scroll bar gray area.",
-    threeddarkshadow    :"The color of the darker (generally outer) of the two borders away from the light source for 3-D elements that appear 3-D due to two concentric layers of surrounding border.",
-    threedface          :"The face background color for 3-D elements that appear 3-D due to two concentric layers of surrounding border.",
-    threedhighlight     :"The color of the lighter (generally outer) of the two borders facing the light source for 3-D elements that appear 3-D due to two concentric layers of surrounding border.",
-    threedlightshadow   :"The color of the darker (generally inner) of the two borders facing the light source for 3-D elements that appear 3-D due to two concentric layers of surrounding border.",
-    threedshadow        :"The color of the lighter (generally inner) of the two borders away from the light source for 3-D elements that appear 3-D due to two concentric layers of surrounding border.",
-    window              :"Window background.",
-    windowframe         :"Window frame.",
-    windowtext          :"Text in windows."
-};
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a selector combinator (whitespace, +, >).
- * @namespace parserlib.css
- * @class Combinator
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {String} text The text representation of the unit.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function Combinator(text, line, col){
-
-    SyntaxUnit.call(this, text, line, col, Parser.COMBINATOR_TYPE);
-
-    /**
-     * The type of modifier.
-     * @type String
-     * @property type
-     */
-    this.type = "unknown";
-
-    //pretty simple
-    if (/^\s+$/.test(text)){
-        this.type = "descendant";
-    } else if (text == ">"){
-        this.type = "child";
-    } else if (text == "+"){
-        this.type = "adjacent-sibling";
-    } else if (text == "~"){
-        this.type = "sibling";
-    }
-
-}
-
-Combinator.prototype = new SyntaxUnit();
-Combinator.prototype.constructor = Combinator;
-
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a media feature, such as max-width:500.
- * @namespace parserlib.css
- * @class MediaFeature
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {SyntaxUnit} name The name of the feature.
- * @param {SyntaxUnit} value The value of the feature or null if none.
- */
-function MediaFeature(name, value){
-
-    SyntaxUnit.call(this, "(" + name + (value !== null ? ":" + value : "") + ")", name.startLine, name.startCol, Parser.MEDIA_FEATURE_TYPE);
-
-    /**
-     * The name of the media feature
-     * @type String
-     * @property name
-     */
-    this.name = name;
-
-    /**
-     * The value for the feature or null if there is none.
-     * @type SyntaxUnit
-     * @property value
-     */
-    this.value = value;
-}
-
-MediaFeature.prototype = new SyntaxUnit();
-MediaFeature.prototype.constructor = MediaFeature;
-
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents an individual media query.
- * @namespace parserlib.css
- * @class MediaQuery
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {String} modifier The modifier "not" or "only" (or null).
- * @param {String} mediaType The type of media (i.e., "print").
- * @param {Array} parts Array of selectors parts making up this selector.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function MediaQuery(modifier, mediaType, features, line, col){
-
-    SyntaxUnit.call(this, (modifier ? modifier + " ": "") + (mediaType ? mediaType : "") + (mediaType && features.length > 0 ? " and " : "") + features.join(" and "), line, col, Parser.MEDIA_QUERY_TYPE);
-
-    /**
-     * The media modifier ("not" or "only")
-     * @type String
-     * @property modifier
-     */
-    this.modifier = modifier;
-
-    /**
-     * The mediaType (i.e., "print")
-     * @type String
-     * @property mediaType
-     */
-    this.mediaType = mediaType;
-
-    /**
-     * The parts that make up the selector.
-     * @type Array
-     * @property features
-     */
-    this.features = features;
-
-}
-
-MediaQuery.prototype = new SyntaxUnit();
-MediaQuery.prototype.constructor = MediaQuery;
-
-
-/*global Tokens, TokenStream, SyntaxError, Properties, Validation, ValidationError, SyntaxUnit,
-    PropertyValue, PropertyValuePart, SelectorPart, SelectorSubPart, Selector,
-    PropertyName, Combinator, MediaFeature, MediaQuery, EventTarget */
-
-/**
- * A CSS3 parser.
- * @namespace parserlib.css
- * @class Parser
- * @constructor
- * @param {Object} options (Optional) Various options for the parser:
- *      starHack (true|false) to allow IE6 star hack as valid,
- *      underscoreHack (true|false) to interpret leading underscores
- *      as IE6-7 targeting for known properties, ieFilters (true|false)
- *      to indicate that IE < 8 filters should be accepted and not throw
- *      syntax errors.
- */
-function Parser(options){
-
-    //inherit event functionality
-    EventTarget.call(this);
-
-
-    this.options = options || {};
-
-    this._tokenStream = null;
-}
-
-//Static constants
-Parser.DEFAULT_TYPE = 0;
-Parser.COMBINATOR_TYPE = 1;
-Parser.MEDIA_FEATURE_TYPE = 2;
-Parser.MEDIA_QUERY_TYPE = 3;
-Parser.PROPERTY_NAME_TYPE = 4;
-Parser.PROPERTY_VALUE_TYPE = 5;
-Parser.PROPERTY_VALUE_PART_TYPE = 6;
-Parser.SELECTOR_TYPE = 7;
-Parser.SELECTOR_PART_TYPE = 8;
-Parser.SELECTOR_SUB_PART_TYPE = 9;
-
-Parser.prototype = function(){
-
-    var proto = new EventTarget(),  //new prototype
-        prop,
-        additions =  {
-
-            //restore constructor
-            constructor: Parser,
-
-            //instance constants - yuck
-            DEFAULT_TYPE : 0,
-            COMBINATOR_TYPE : 1,
-            MEDIA_FEATURE_TYPE : 2,
-            MEDIA_QUERY_TYPE : 3,
-            PROPERTY_NAME_TYPE : 4,
-            PROPERTY_VALUE_TYPE : 5,
-            PROPERTY_VALUE_PART_TYPE : 6,
-            SELECTOR_TYPE : 7,
-            SELECTOR_PART_TYPE : 8,
-            SELECTOR_SUB_PART_TYPE : 9,
-
-            //-----------------------------------------------------------------
-            // Grammar
-            //-----------------------------------------------------------------
-
-            _stylesheet: function(){
-
-                /*
-                 * stylesheet
-                 *  : [ CHARSET_SYM S* STRING S* ';' ]?
-                 *    [S|CDO|CDC]* [ import [S|CDO|CDC]* ]*
-                 *    [ namespace [S|CDO|CDC]* ]*
-                 *    [ [ ruleset | media | page | font_face | keyframes ] [S|CDO|CDC]* ]*
-                 *  ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    charset     = null,
-                    count,
-                    token,
-                    tt;
-
-                this.fire("startstylesheet");
-
-                //try to read character set
-                this._charset();
-
-                this._skipCruft();
-
-                //try to read imports - may be more than one
-                while (tokenStream.peek() == Tokens.IMPORT_SYM){
-                    this._import();
-                    this._skipCruft();
-                }
-
-                //try to read namespaces - may be more than one
-                while (tokenStream.peek() == Tokens.NAMESPACE_SYM){
-                    this._namespace();
-                    this._skipCruft();
-                }
-
-                //get the next token
-                tt = tokenStream.peek();
-
-                //try to read the rest
-                while(tt > Tokens.EOF){
-
-                    try {
-
-                        switch(tt){
-                            case Tokens.MEDIA_SYM:
-                                this._media();
-                                this._skipCruft();
-                                break;
-                            case Tokens.PAGE_SYM:
-                                this._page();
-                                this._skipCruft();
-                                break;
-                            case Tokens.FONT_FACE_SYM:
-                                this._font_face();
-                                this._skipCruft();
-                                break;
-                            case Tokens.KEYFRAMES_SYM:
-                                this._keyframes();
-                                this._skipCruft();
-                                break;
-                            case Tokens.VIEWPORT_SYM:
-                                this._viewport();
-                                this._skipCruft();
-                                break;
-                            case Tokens.UNKNOWN_SYM:  //unknown @ rule
-                                tokenStream.get();
-                                if (!this.options.strict){
-
-                                    //fire error event
-                                    this.fire({
-                                        type:       "error",
-                                        error:      null,
-                                        message:    "Unknown @ rule: " + tokenStream.LT(0).value + ".",
-                                        line:       tokenStream.LT(0).startLine,
-                                        col:        tokenStream.LT(0).startCol
-                                    });
-
-                                    //skip braces
-                                    count=0;
-                                    while (tokenStream.advance([Tokens.LBRACE, Tokens.RBRACE]) == Tokens.LBRACE){
-                                        count++;    //keep track of nesting depth
-                                    }
-
-                                    while(count){
-                                        tokenStream.advance([Tokens.RBRACE]);
-                                        count--;
-                                    }
-
-                                } else {
-                                    //not a syntax error, rethrow it
-                                    throw new SyntaxError("Unknown @ rule.", tokenStream.LT(0).startLine, tokenStream.LT(0).startCol);
-                                }
-                                break;
-                            case Tokens.S:
-                                this._readWhitespace();
-                                break;
-                            default:
-                                if(!this._ruleset()){
-
-                                    //error handling for known issues
-                                    switch(tt){
-                                        case Tokens.CHARSET_SYM:
-                                            token = tokenStream.LT(1);
-                                            this._charset(false);
-                                            throw new SyntaxError("@charset not allowed here.", token.startLine, token.startCol);
-                                        case Tokens.IMPORT_SYM:
-                                            token = tokenStream.LT(1);
-                                            this._import(false);
-                                            throw new SyntaxError("@import not allowed here.", token.startLine, token.startCol);
-                                        case Tokens.NAMESPACE_SYM:
-                                            token = tokenStream.LT(1);
-                                            this._namespace(false);
-                                            throw new SyntaxError("@namespace not allowed here.", token.startLine, token.startCol);
-                                        default:
-                                            tokenStream.get();  //get the last token
-                                            this._unexpectedToken(tokenStream.token());
-                                    }
-
-                                }
-                        }
-                    } catch(ex) {
-                        if (ex instanceof SyntaxError && !this.options.strict){
-                            this.fire({
-                                type:       "error",
-                                error:      ex,
-                                message:    ex.message,
-                                line:       ex.line,
-                                col:        ex.col
-                            });
-                        } else {
-                            throw ex;
-                        }
-                    }
-
-                    tt = tokenStream.peek();
-                }
-
-                if (tt != Tokens.EOF){
-                    this._unexpectedToken(tokenStream.token());
-                }
-
-                this.fire("endstylesheet");
-            },
-
-            _charset: function(emit){
-                var tokenStream = this._tokenStream,
-                    charset,
-                    token,
-                    line,
-                    col;
-
-                if (tokenStream.match(Tokens.CHARSET_SYM)){
-                    line = tokenStream.token().startLine;
-                    col = tokenStream.token().startCol;
-
-                    this._readWhitespace();
-                    tokenStream.mustMatch(Tokens.STRING);
-
-                    token = tokenStream.token();
-                    charset = token.value;
-
-                    this._readWhitespace();
-                    tokenStream.mustMatch(Tokens.SEMICOLON);
-
-                    if (emit !== false){
-                        this.fire({
-                            type:   "charset",
-                            charset:charset,
-                            line:   line,
-                            col:    col
-                        });
-                    }
-                }
-            },
-
-            _import: function(emit){
-                /*
-                 * import
-                 *   : IMPORT_SYM S*
-                 *    [STRING|URI] S* media_query_list? ';' S*
-                 */
-
-                var tokenStream = this._tokenStream,
-                    tt,
-                    uri,
-                    importToken,
-                    mediaList   = [];
-
-                //read import symbol
-                tokenStream.mustMatch(Tokens.IMPORT_SYM);
-                importToken = tokenStream.token();
-                this._readWhitespace();
-
-                tokenStream.mustMatch([Tokens.STRING, Tokens.URI]);
-
-                //grab the URI value
-                uri = tokenStream.token().value.replace(/(?:url\()?["']([^"']+)["']\)?/, "$1");
-
-                this._readWhitespace();
-
-                mediaList = this._media_query_list();
-
-                //must end with a semicolon
-                tokenStream.mustMatch(Tokens.SEMICOLON);
-                this._readWhitespace();
-
-                if (emit !== false){
-                    this.fire({
-                        type:   "import",
-                        uri:    uri,
-                        media:  mediaList,
-                        line:   importToken.startLine,
-                        col:    importToken.startCol
-                    });
-                }
-
-            },
-
-            _namespace: function(emit){
-                /*
-                 * namespace
-                 *   : NAMESPACE_SYM S* [namespace_prefix S*]? [STRING|URI] S* ';' S*
-                 */
-
-                var tokenStream = this._tokenStream,
-                    line,
-                    col,
-                    prefix,
-                    uri;
-
-                //read import symbol
-                tokenStream.mustMatch(Tokens.NAMESPACE_SYM);
-                line = tokenStream.token().startLine;
-                col = tokenStream.token().startCol;
-                this._readWhitespace();
-
-                //it's a namespace prefix - no _namespace_prefix() method because it's just an IDENT
-                if (tokenStream.match(Tokens.IDENT)){
-                    prefix = tokenStream.token().value;
-                    this._readWhitespace();
-                }
-
-                tokenStream.mustMatch([Tokens.STRING, Tokens.URI]);
-                /*if (!tokenStream.match(Tokens.STRING)){
-                    tokenStream.mustMatch(Tokens.URI);
-                }*/
-
-                //grab the URI value
-                uri = tokenStream.token().value.replace(/(?:url\()?["']([^"']+)["']\)?/, "$1");
-
-                this._readWhitespace();
-
-                //must end with a semicolon
-                tokenStream.mustMatch(Tokens.SEMICOLON);
-                this._readWhitespace();
-
-                if (emit !== false){
-                    this.fire({
-                        type:   "namespace",
-                        prefix: prefix,
-                        uri:    uri,
-                        line:   line,
-                        col:    col
-                    });
-                }
-
-            },
-
-            _media: function(){
-                /*
-                 * media
-                 *   : MEDIA_SYM S* media_query_list S* '{' S* ruleset* '}' S*
-                 *   ;
-                 */
-                var tokenStream     = this._tokenStream,
-                    line,
-                    col,
-                    mediaList;//       = [];
-
-                //look for @media
-                tokenStream.mustMatch(Tokens.MEDIA_SYM);
-                line = tokenStream.token().startLine;
-                col = tokenStream.token().startCol;
-
-                this._readWhitespace();
-
-                mediaList = this._media_query_list();
-
-                tokenStream.mustMatch(Tokens.LBRACE);
-                this._readWhitespace();
-
-                this.fire({
-                    type:   "startmedia",
-                    media:  mediaList,
-                    line:   line,
-                    col:    col
-                });
-
-                while(true) {
-                    if (tokenStream.peek() == Tokens.PAGE_SYM){
-                        this._page();
-                    } else   if (tokenStream.peek() == Tokens.FONT_FACE_SYM){
-                        this._font_face();
-                    } else if (!this._ruleset()){
-                        break;
-                    }
-                }
-
-                tokenStream.mustMatch(Tokens.RBRACE);
-                this._readWhitespace();
-
-                this.fire({
-                    type:   "endmedia",
-                    media:  mediaList,
-                    line:   line,
-                    col:    col
-                });
-            },
-
-
-            //CSS3 Media Queries
-            _media_query_list: function(){
-                /*
-                 * media_query_list
-                 *   : S* [media_query [ ',' S* media_query ]* ]?
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    mediaList   = [];
-
-
-                this._readWhitespace();
-
-                if (tokenStream.peek() == Tokens.IDENT || tokenStream.peek() == Tokens.LPAREN){
-                    mediaList.push(this._media_query());
-                }
-
-                while(tokenStream.match(Tokens.COMMA)){
-                    this._readWhitespace();
-                    mediaList.push(this._media_query());
-                }
-
-                return mediaList;
-            },
-
-            /*
-             * Note: "expression" in the grammar maps to the _media_expression
-             * method.
-
-             */
-            _media_query: function(){
-                /*
-                 * media_query
-                 *   : [ONLY | NOT]? S* media_type S* [ AND S* expression ]*
-                 *   | expression [ AND S* expression ]*
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    type        = null,
-                    ident       = null,
-                    token       = null,
-                    expressions = [];
-
-                if (tokenStream.match(Tokens.IDENT)){
-                    ident = tokenStream.token().value.toLowerCase();
-
-                    //since there's no custom tokens for these, need to manually check
-                    if (ident != "only" && ident != "not"){
-                        tokenStream.unget();
-                        ident = null;
-                    } else {
-                        token = tokenStream.token();
-                    }
-                }
-
-                this._readWhitespace();
-
-                if (tokenStream.peek() == Tokens.IDENT){
-                    type = this._media_type();
-                    if (token === null){
-                        token = tokenStream.token();
-                    }
-                } else if (tokenStream.peek() == Tokens.LPAREN){
-                    if (token === null){
-                        token = tokenStream.LT(1);
-                    }
-                    expressions.push(this._media_expression());
-                }
-
-                if (type === null && expressions.length === 0){
-                    return null;
-                } else {
-                    this._readWhitespace();
-                    while (tokenStream.match(Tokens.IDENT)){
-                        if (tokenStream.token().value.toLowerCase() != "and"){
-                            this._unexpectedToken(tokenStream.token());
-                        }
-
-                        this._readWhitespace();
-                        expressions.push(this._media_expression());
-                    }
-                }
-
-                return new MediaQuery(ident, type, expressions, token.startLine, token.startCol);
-            },
-
-            //CSS3 Media Queries
-            _media_type: function(){
-                /*
-                 * media_type
-                 *   : IDENT
-                 *   ;
-                 */
-                return this._media_feature();
-            },
-
-            /**
-             * Note: in CSS3 Media Queries, this is called "expression".
-             * Renamed here to avoid conflict with CSS3 Selectors
-             * definition of "expression". Also note that "expr" in the
-             * grammar now maps to "expression" from CSS3 selectors.
-             * @method _media_expression
-             * @private
-             */
-            _media_expression: function(){
-                /*
-                 * expression
-                 *  : '(' S* media_feature S* [ ':' S* expr ]? ')' S*
-                 *  ;
-                 */
-                var tokenStream = this._tokenStream,
-                    feature     = null,
-                    token,
-                    expression  = null;
-
-                tokenStream.mustMatch(Tokens.LPAREN);
-
-                feature = this._media_feature();
-                this._readWhitespace();
-
-                if (tokenStream.match(Tokens.COLON)){
-                    this._readWhitespace();
-                    token = tokenStream.LT(1);
-                    expression = this._expression();
-                }
-
-                tokenStream.mustMatch(Tokens.RPAREN);
-                this._readWhitespace();
-
-                return new MediaFeature(feature, (expression ? new SyntaxUnit(expression, token.startLine, token.startCol) : null));
-            },
-
-            //CSS3 Media Queries
-            _media_feature: function(){
-                /*
-                 * media_feature
-                 *   : IDENT
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream;
-
-                tokenStream.mustMatch(Tokens.IDENT);
-
-                return SyntaxUnit.fromToken(tokenStream.token());
-            },
-
-            //CSS3 Paged Media
-            _page: function(){
-                /*
-                 * page:
-                 *    PAGE_SYM S* IDENT? pseudo_page? S*
-                 *    '{' S* [ declaration | margin ]? [ ';' S* [ declaration | margin ]? ]* '}' S*
-                 *    ;
-                 */
-                var tokenStream = this._tokenStream,
-                    line,
-                    col,
-                    identifier  = null,
-                    pseudoPage  = null;
-
-                //look for @page
-                tokenStream.mustMatch(Tokens.PAGE_SYM);
-                line = tokenStream.token().startLine;
-                col = tokenStream.token().startCol;
-
-                this._readWhitespace();
-
-                if (tokenStream.match(Tokens.IDENT)){
-                    identifier = tokenStream.token().value;
-
-                    //The value 'auto' may not be used as a page name and MUST be treated as a syntax error.
-                    if (identifier.toLowerCase() === "auto"){
-                        this._unexpectedToken(tokenStream.token());
-                    }
-                }
-
-                //see if there's a colon upcoming
-                if (tokenStream.peek() == Tokens.COLON){
-                    pseudoPage = this._pseudo_page();
-                }
-
-                this._readWhitespace();
-
-                this.fire({
-                    type:   "startpage",
-                    id:     identifier,
-                    pseudo: pseudoPage,
-                    line:   line,
-                    col:    col
-                });
-
-                this._readDeclarations(true, true);
-
-                this.fire({
-                    type:   "endpage",
-                    id:     identifier,
-                    pseudo: pseudoPage,
-                    line:   line,
-                    col:    col
-                });
-
-            },
-
-            //CSS3 Paged Media
-            _margin: function(){
-                /*
-                 * margin :
-                 *    margin_sym S* '{' declaration [ ';' S* declaration? ]* '}' S*
-                 *    ;
-                 */
-                var tokenStream = this._tokenStream,
-                    line,
-                    col,
-                    marginSym   = this._margin_sym();
-
-                if (marginSym){
-                    line = tokenStream.token().startLine;
-                    col = tokenStream.token().startCol;
-
-                    this.fire({
-                        type: "startpagemargin",
-                        margin: marginSym,
-                        line:   line,
-                        col:    col
-                    });
-
-                    this._readDeclarations(true);
-
-                    this.fire({
-                        type: "endpagemargin",
-                        margin: marginSym,
-                        line:   line,
-                        col:    col
-                    });
-                    return true;
-                } else {
-                    return false;
-                }
-            },
-
-            //CSS3 Paged Media
-            _margin_sym: function(){
-
-                /*
-                 * margin_sym :
-                 *    TOPLEFTCORNER_SYM |
-                 *    TOPLEFT_SYM |
-                 *    TOPCENTER_SYM |
-                 *    TOPRIGHT_SYM |
-                 *    TOPRIGHTCORNER_SYM |
-                 *    BOTTOMLEFTCORNER_SYM |
-                 *    BOTTOMLEFT_SYM |
-                 *    BOTTOMCENTER_SYM |
-                 *    BOTTOMRIGHT_SYM |
-                 *    BOTTOMRIGHTCORNER_SYM |
-                 *    LEFTTOP_SYM |
-                 *    LEFTMIDDLE_SYM |
-                 *    LEFTBOTTOM_SYM |
-                 *    RIGHTTOP_SYM |
-                 *    RIGHTMIDDLE_SYM |
-                 *    RIGHTBOTTOM_SYM
-                 *    ;
-                 */
-
-                var tokenStream = this._tokenStream;
-
-                if(tokenStream.match([Tokens.TOPLEFTCORNER_SYM, Tokens.TOPLEFT_SYM,
-                        Tokens.TOPCENTER_SYM, Tokens.TOPRIGHT_SYM, Tokens.TOPRIGHTCORNER_SYM,
-                        Tokens.BOTTOMLEFTCORNER_SYM, Tokens.BOTTOMLEFT_SYM,
-                        Tokens.BOTTOMCENTER_SYM, Tokens.BOTTOMRIGHT_SYM,
-                        Tokens.BOTTOMRIGHTCORNER_SYM, Tokens.LEFTTOP_SYM,
-                        Tokens.LEFTMIDDLE_SYM, Tokens.LEFTBOTTOM_SYM, Tokens.RIGHTTOP_SYM,
-                        Tokens.RIGHTMIDDLE_SYM, Tokens.RIGHTBOTTOM_SYM]))
-                {
-                    return SyntaxUnit.fromToken(tokenStream.token());
-                } else {
-                    return null;
-                }
-
-            },
-
-            _pseudo_page: function(){
-                /*
-                 * pseudo_page
-                 *   : ':' IDENT
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream;
-
-                tokenStream.mustMatch(Tokens.COLON);
-                tokenStream.mustMatch(Tokens.IDENT);
-
-                //TODO: CSS3 Paged Media says only "left", "center", and "right" are allowed
-
-                return tokenStream.token().value;
-            },
-
-            _font_face: function(){
-                /*
-                 * font_face
-                 *   : FONT_FACE_SYM S*
-                 *     '{' S* declaration [ ';' S* declaration ]* '}' S*
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    line,
-                    col;
-
-                //look for @page
-                tokenStream.mustMatch(Tokens.FONT_FACE_SYM);
-                line = tokenStream.token().startLine;
-                col = tokenStream.token().startCol;
-
-                this._readWhitespace();
-
-                this.fire({
-                    type:   "startfontface",
-                    line:   line,
-                    col:    col
-                });
-
-                this._readDeclarations(true);
-
-                this.fire({
-                    type:   "endfontface",
-                    line:   line,
-                    col:    col
-                });
-            },
-
-            _viewport: function(){
-                /*
-                 * viewport
-                 *   : VIEWPORT_SYM S*
-                 *     '{' S* declaration? [ ';' S* declaration? ]* '}' S*
-                 *   ;
-                 */
-                 var tokenStream = this._tokenStream,
-                    line,
-                    col;
-
-                    tokenStream.mustMatch(Tokens.VIEWPORT_SYM);
-                    line = tokenStream.token().startLine;
-                    col = tokenStream.token().startCol;
-
-                    this._readWhitespace();
-
-                    this.fire({
-                        type:   "startviewport",
-                        line:   line,
-                        col:    col
-                    });
-
-                    this._readDeclarations(true);
-
-                    this.fire({
-                        type:   "endviewport",
-                        line:   line,
-                        col:    col
-                    });
-
-            },
-
-            _operator: function(inFunction){
-
-                /*
-                 * operator (outside function)
-                 *  : '/' S* | ',' S* | /( empty )/
-                 * operator (inside function)
-                 *  : '/' S* | '+' S* | '*' S* | '-' S* /( empty )/
-                 *  ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    token       = null;
-
-                if (tokenStream.match([Tokens.SLASH, Tokens.COMMA]) ||
-                    (inFunction && tokenStream.match([Tokens.PLUS, Tokens.STAR, Tokens.MINUS]))){
-                    token =  tokenStream.token();
-                    this._readWhitespace();
-                }
-                return token ? PropertyValuePart.fromToken(token) : null;
-
-            },
-
-            _combinator: function(){
-
-                /*
-                 * combinator
-                 *  : PLUS S* | GREATER S* | TILDE S* | S+
-                 *  ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    value       = null,
-                    token;
-
-                if(tokenStream.match([Tokens.PLUS, Tokens.GREATER, Tokens.TILDE])){
-                    token = tokenStream.token();
-                    value = new Combinator(token.value, token.startLine, token.startCol);
-                    this._readWhitespace();
-                }
-
-                return value;
-            },
-
-            _unary_operator: function(){
-
-                /*
-                 * unary_operator
-                 *  : '-' | '+'
-                 *  ;
-                 */
-
-                var tokenStream = this._tokenStream;
-
-                if (tokenStream.match([Tokens.MINUS, Tokens.PLUS])){
-                    return tokenStream.token().value;
-                } else {
-                    return null;
-                }
-            },
-
-            _property: function(){
-
-                /*
-                 * property
-                 *   : IDENT S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    value       = null,
-                    hack        = null,
-                    tokenValue,
-                    token,
-                    line,
-                    col;
-
-                //check for star hack - throws error if not allowed
-                if (tokenStream.peek() == Tokens.STAR && this.options.starHack){
-                    tokenStream.get();
-                    token = tokenStream.token();
-                    hack = token.value;
-                    line = token.startLine;
-                    col = token.startCol;
-                }
-
-                if(tokenStream.match(Tokens.IDENT)){
-                    token = tokenStream.token();
-                    tokenValue = token.value;
-
-                    //check for underscore hack - no error if not allowed because it's valid CSS syntax
-                    if (tokenValue.charAt(0) == "_" && this.options.underscoreHack){
-                        hack = "_";
-                        tokenValue = tokenValue.substring(1);
-                    }
-
-                    value = new PropertyName(tokenValue, hack, (line||token.startLine), (col||token.startCol));
-                    this._readWhitespace();
-                }
-
-                return value;
-            },
-
-            //Augmented with CSS3 Selectors
-            _ruleset: function(){
-                /*
-                 * ruleset
-                 *   : selectors_group
-                 *     '{' S* declaration? [ ';' S* declaration? ]* '}' S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    tt,
-                    selectors;
-
-
-                /*
-                 * Error Recovery: If even a single selector fails to parse,
-                 * then the entire ruleset should be thrown away.
-                 */
-                try {
-                    selectors = this._selectors_group();
-                } catch (ex){
-                    if (ex instanceof SyntaxError && !this.options.strict){
-
-                        //fire error event
-                        this.fire({
-                            type:       "error",
-                            error:      ex,
-                            message:    ex.message,
-                            line:       ex.line,
-                            col:        ex.col
-                        });
-
-                        //skip over everything until closing brace
-                        tt = tokenStream.advance([Tokens.RBRACE]);
-                        if (tt == Tokens.RBRACE){
-                            //if there's a right brace, the rule is finished so don't do anything
-                        } else {
-                            //otherwise, rethrow the error because it wasn't handled properly
-                            throw ex;
-                        }
-
-                    } else {
-                        //not a syntax error, rethrow it
-                        throw ex;
-                    }
-
-                    //trigger parser to continue
-                    return true;
-                }
-
-                //if it got here, all selectors parsed
-                if (selectors){
-
-                    this.fire({
-                        type:       "startrule",
-                        selectors:  selectors,
-                        line:       selectors[0].line,
-                        col:        selectors[0].col
-                    });
-
-                    this._readDeclarations(true);
-
-                    this.fire({
-                        type:       "endrule",
-                        selectors:  selectors,
-                        line:       selectors[0].line,
-                        col:        selectors[0].col
-                    });
-
-                }
-
-                return selectors;
-
-            },
-
-            //CSS3 Selectors
-            _selectors_group: function(){
-
-                /*
-                 * selectors_group
-                 *   : selector [ COMMA S* selector ]*
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    selectors   = [],
-                    selector;
-
-                selector = this._selector();
-                if (selector !== null){
-
-                    selectors.push(selector);
-                    while(tokenStream.match(Tokens.COMMA)){
-                        this._readWhitespace();
-                        selector = this._selector();
-                        if (selector !== null){
-                            selectors.push(selector);
-                        } else {
-                            this._unexpectedToken(tokenStream.LT(1));
-                        }
-                    }
-                }
-
-                return selectors.length ? selectors : null;
-            },
-
-            //CSS3 Selectors
-            _selector: function(){
-                /*
-                 * selector
-                 *   : simple_selector_sequence [ combinator simple_selector_sequence ]*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    selector    = [],
-                    nextSelector = null,
-                    combinator  = null,
-                    ws          = null;
-
-                //if there's no simple selector, then there's no selector
-                nextSelector = this._simple_selector_sequence();
-                if (nextSelector === null){
-                    return null;
-                }
-
-                selector.push(nextSelector);
-
-                do {
-
-                    //look for a combinator
-                    combinator = this._combinator();
-
-                    if (combinator !== null){
-                        selector.push(combinator);
-                        nextSelector = this._simple_selector_sequence();
-
-                        //there must be a next selector
-                        if (nextSelector === null){
-                            this._unexpectedToken(tokenStream.LT(1));
-                        } else {
-
-                            //nextSelector is an instance of SelectorPart
-                            selector.push(nextSelector);
-                        }
-                    } else {
-
-                        //if there's not whitespace, we're done
-                        if (this._readWhitespace()){
-
-                            //add whitespace separator
-                            ws = new Combinator(tokenStream.token().value, tokenStream.token().startLine, tokenStream.token().startCol);
-
-                            //combinator is not required
-                            combinator = this._combinator();
-
-                            //selector is required if there's a combinator
-                            nextSelector = this._simple_selector_sequence();
-                            if (nextSelector === null){
-                                if (combinator !== null){
-                                    this._unexpectedToken(tokenStream.LT(1));
-                                }
-                            } else {
-
-                                if (combinator !== null){
-                                    selector.push(combinator);
-                                } else {
-                                    selector.push(ws);
-                                }
-
-                                selector.push(nextSelector);
-                            }
-                        } else {
-                            break;
-                        }
-
-                    }
-                } while(true);
-
-                return new Selector(selector, selector[0].line, selector[0].col);
-            },
-
-            //CSS3 Selectors
-            _simple_selector_sequence: function(){
-                /*
-                 * simple_selector_sequence
-                 *   : [ type_selector | universal ]
-                 *     [ HASH | class | attrib | pseudo | negation ]*
-                 *   | [ HASH | class | attrib | pseudo | negation ]+
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-
-                    //parts of a simple selector
-                    elementName = null,
-                    modifiers   = [],
-
-                    //complete selector text
-                    selectorText= "",
-
-                    //the different parts after the element name to search for
-                    components  = [
-                        //HASH
-                        function(){
-                            return tokenStream.match(Tokens.HASH) ?
-                                    new SelectorSubPart(tokenStream.token().value, "id", tokenStream.token().startLine, tokenStream.token().startCol) :
-                                    null;
-                        },
-                        this._class,
-                        this._attrib,
-                        this._pseudo,
-                        this._negation
-                    ],
-                    i           = 0,
-                    len         = components.length,
-                    component   = null,
-                    found       = false,
-                    line,
-                    col;
-
-
-                //get starting line and column for the selector
-                line = tokenStream.LT(1).startLine;
-                col = tokenStream.LT(1).startCol;
-
-                elementName = this._type_selector();
-                if (!elementName){
-                    elementName = this._universal();
-                }
-
-                if (elementName !== null){
-                    selectorText += elementName;
-                }
-
-                while(true){
-
-                    //whitespace means we're done
-                    if (tokenStream.peek() === Tokens.S){
-                        break;
-                    }
-
-                    //check for each component
-                    while(i < len && component === null){
-                        component = components[i++].call(this);
-                    }
-
-                    if (component === null){
-
-                        //we don't have a selector
-                        if (selectorText === ""){
-                            return null;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        i = 0;
-                        modifiers.push(component);
-                        selectorText += component.toString();
-                        component = null;
-                    }
-                }
-
-
-                return selectorText !== "" ?
-                        new SelectorPart(elementName, modifiers, selectorText, line, col) :
-                        null;
-            },
-
-            //CSS3 Selectors
-            _type_selector: function(){
-                /*
-                 * type_selector
-                 *   : [ namespace_prefix ]? element_name
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    ns          = this._namespace_prefix(),
-                    elementName = this._element_name();
-
-                if (!elementName){
-                    /*
-                     * Need to back out the namespace that was read due to both
-                     * type_selector and universal reading namespace_prefix
-                     * first. Kind of hacky, but only way I can figure out
-                     * right now how to not change the grammar.
-                     */
-                    if (ns){
-                        tokenStream.unget();
-                        if (ns.length > 1){
-                            tokenStream.unget();
-                        }
-                    }
-
-                    return null;
-                } else {
-                    if (ns){
-                        elementName.text = ns + elementName.text;
-                        elementName.col -= ns.length;
-                    }
-                    return elementName;
-                }
-            },
-
-            //CSS3 Selectors
-            _class: function(){
-                /*
-                 * class
-                 *   : '.' IDENT
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    token;
-
-                if (tokenStream.match(Tokens.DOT)){
-                    tokenStream.mustMatch(Tokens.IDENT);
-                    token = tokenStream.token();
-                    return new SelectorSubPart("." + token.value, "class", token.startLine, token.startCol - 1);
-                } else {
-                    return null;
-                }
-
-            },
-
-            //CSS3 Selectors
-            _element_name: function(){
-                /*
-                 * element_name
-                 *   : IDENT
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    token;
-
-                if (tokenStream.match(Tokens.IDENT)){
-                    token = tokenStream.token();
-                    return new SelectorSubPart(token.value, "elementName", token.startLine, token.startCol);
-
-                } else {
-                    return null;
-                }
-            },
-
-            //CSS3 Selectors
-            _namespace_prefix: function(){
-                /*
-                 * namespace_prefix
-                 *   : [ IDENT | '*' ]? '|'
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    value       = "";
-
-                //verify that this is a namespace prefix
-                if (tokenStream.LA(1) === Tokens.PIPE || tokenStream.LA(2) === Tokens.PIPE){
-
-                    if(tokenStream.match([Tokens.IDENT, Tokens.STAR])){
-                        value += tokenStream.token().value;
-                    }
-
-                    tokenStream.mustMatch(Tokens.PIPE);
-                    value += "|";
-
-                }
-
-                return value.length ? value : null;
-            },
-
-            //CSS3 Selectors
-            _universal: function(){
-                /*
-                 * universal
-                 *   : [ namespace_prefix ]? '*'
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    value       = "",
-                    ns;
-
-                ns = this._namespace_prefix();
-                if(ns){
-                    value += ns;
-                }
-
-                if(tokenStream.match(Tokens.STAR)){
-                    value += "*";
-                }
-
-                return value.length ? value : null;
-
-           },
-
-            //CSS3 Selectors
-            _attrib: function(){
-                /*
-                 * attrib
-                 *   : '[' S* [ namespace_prefix ]? IDENT S*
-                 *         [ [ PREFIXMATCH |
-                 *             SUFFIXMATCH |
-                 *             SUBSTRINGMATCH |
-                 *             '=' |
-                 *             INCLUDES |
-                 *             DASHMATCH ] S* [ IDENT | STRING ] S*
-                 *         ]? ']'
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    value       = null,
-                    ns,
-                    token;
-
-                if (tokenStream.match(Tokens.LBRACKET)){
-                    token = tokenStream.token();
-                    value = token.value;
-                    value += this._readWhitespace();
-
-                    ns = this._namespace_prefix();
-
-                    if (ns){
-                        value += ns;
-                    }
-
-                    tokenStream.mustMatch(Tokens.IDENT);
-                    value += tokenStream.token().value;
-                    value += this._readWhitespace();
-
-                    if(tokenStream.match([Tokens.PREFIXMATCH, Tokens.SUFFIXMATCH, Tokens.SUBSTRINGMATCH,
-                            Tokens.EQUALS, Tokens.INCLUDES, Tokens.DASHMATCH])){
-
-                        value += tokenStream.token().value;
-                        value += this._readWhitespace();
-
-                        tokenStream.mustMatch([Tokens.IDENT, Tokens.STRING]);
-                        value += tokenStream.token().value;
-                        value += this._readWhitespace();
-                    }
-
-                    tokenStream.mustMatch(Tokens.RBRACKET);
-
-                    return new SelectorSubPart(value + "]", "attribute", token.startLine, token.startCol);
-                } else {
-                    return null;
-                }
-            },
-
-            //CSS3 Selectors
-            _pseudo: function(){
-
-                /*
-                 * pseudo
-                 *   : ':' ':'? [ IDENT | functional_pseudo ]
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    pseudo      = null,
-                    colons      = ":",
-                    line,
-                    col;
-
-                if (tokenStream.match(Tokens.COLON)){
-
-                    if (tokenStream.match(Tokens.COLON)){
-                        colons += ":";
-                    }
-
-                    if (tokenStream.match(Tokens.IDENT)){
-                        pseudo = tokenStream.token().value;
-                        line = tokenStream.token().startLine;
-                        col = tokenStream.token().startCol - colons.length;
-                    } else if (tokenStream.peek() == Tokens.FUNCTION){
-                        line = tokenStream.LT(1).startLine;
-                        col = tokenStream.LT(1).startCol - colons.length;
-                        pseudo = this._functional_pseudo();
-                    }
-
-                    if (pseudo){
-                        pseudo = new SelectorSubPart(colons + pseudo, "pseudo", line, col);
-                    }
-                }
-
-                return pseudo;
-            },
-
-            //CSS3 Selectors
-            _functional_pseudo: function(){
-                /*
-                 * functional_pseudo
-                 *   : FUNCTION S* expression ')'
-                 *   ;
-                */
-
-                var tokenStream = this._tokenStream,
-                    value = null;
-
-                if(tokenStream.match(Tokens.FUNCTION)){
-                    value = tokenStream.token().value;
-                    value += this._readWhitespace();
-                    value += this._expression();
-                    tokenStream.mustMatch(Tokens.RPAREN);
-                    value += ")";
-                }
-
-                return value;
-            },
-
-            //CSS3 Selectors
-            _expression: function(){
-                /*
-                 * expression
-                 *   : [ [ PLUS | '-' | DIMENSION | NUMBER | STRING | IDENT ] S* ]+
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    value       = "";
-
-                while(tokenStream.match([Tokens.PLUS, Tokens.MINUS, Tokens.DIMENSION,
-                        Tokens.NUMBER, Tokens.STRING, Tokens.IDENT, Tokens.LENGTH,
-                        Tokens.FREQ, Tokens.ANGLE, Tokens.TIME,
-                        Tokens.RESOLUTION, Tokens.SLASH])){
-
-                    value += tokenStream.token().value;
-                    value += this._readWhitespace();
-                }
-
-                return value.length ? value : null;
-
-            },
-
-            //CSS3 Selectors
-            _negation: function(){
-                /*
-                 * negation
-                 *   : NOT S* negation_arg S* ')'
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    line,
-                    col,
-                    value       = "",
-                    arg,
-                    subpart     = null;
-
-                if (tokenStream.match(Tokens.NOT)){
-                    value = tokenStream.token().value;
-                    line = tokenStream.token().startLine;
-                    col = tokenStream.token().startCol;
-                    value += this._readWhitespace();
-                    arg = this._negation_arg();
-                    value += arg;
-                    value += this._readWhitespace();
-                    tokenStream.match(Tokens.RPAREN);
-                    value += tokenStream.token().value;
-
-                    subpart = new SelectorSubPart(value, "not", line, col);
-                    subpart.args.push(arg);
-                }
-
-                return subpart;
-            },
-
-            //CSS3 Selectors
-            _negation_arg: function(){
-                /*
-                 * negation_arg
-                 *   : type_selector | universal | HASH | class | attrib | pseudo
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    args        = [
-                        this._type_selector,
-                        this._universal,
-                        function(){
-                            return tokenStream.match(Tokens.HASH) ?
-                                    new SelectorSubPart(tokenStream.token().value, "id", tokenStream.token().startLine, tokenStream.token().startCol) :
-                                    null;
-                        },
-                        this._class,
-                        this._attrib,
-                        this._pseudo
-                    ],
-                    arg         = null,
-                    i           = 0,
-                    len         = args.length,
-                    elementName,
-                    line,
-                    col,
-                    part;
-
-                line = tokenStream.LT(1).startLine;
-                col = tokenStream.LT(1).startCol;
-
-                while(i < len && arg === null){
-
-                    arg = args[i].call(this);
-                    i++;
-                }
-
-                //must be a negation arg
-                if (arg === null){
-                    this._unexpectedToken(tokenStream.LT(1));
-                }
-
-                //it's an element name
-                if (arg.type == "elementName"){
-                    part = new SelectorPart(arg, [], arg.toString(), line, col);
-                } else {
-                    part = new SelectorPart(null, [arg], arg.toString(), line, col);
-                }
-
-                return part;
-            },
-
-            _declaration: function(){
-
-                /*
-                 * declaration
-                 *   : property ':' S* expr prio?
-                 *   | /( empty )/
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    property    = null,
-                    expr        = null,
-                    prio        = null,
-                    error       = null,
-                    invalid     = null,
-                    propertyName= "";
-
-                property = this._property();
-                if (property !== null){
-
-                    tokenStream.mustMatch(Tokens.COLON);
-                    this._readWhitespace();
-
-                    expr = this._expr();
-
-                    //if there's no parts for the value, it's an error
-                    if (!expr || expr.length === 0){
-                        this._unexpectedToken(tokenStream.LT(1));
-                    }
-
-                    prio = this._prio();
-
-                    /*
-                     * If hacks should be allowed, then only check the root
-                     * property. If hacks should not be allowed, treat
-                     * _property or *property as invalid properties.
-                     */
-                    propertyName = property.toString();
-                    if (this.options.starHack && property.hack == "*" ||
-                            this.options.underscoreHack && property.hack == "_") {
-
-                        propertyName = property.text;
-                    }
-
-                    try {
-                        this._validateProperty(propertyName, expr);
-                    } catch (ex) {
-                        invalid = ex;
-                    }
-
-                    this.fire({
-                        type:       "property",
-                        property:   property,
-                        value:      expr,
-                        important:  prio,
-                        line:       property.line,
-                        col:        property.col,
-                        invalid:    invalid
-                    });
-
-                    return true;
-                } else {
-                    return false;
-                }
-            },
-
-            _prio: function(){
-                /*
-                 * prio
-                 *   : IMPORTANT_SYM S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    result      = tokenStream.match(Tokens.IMPORTANT_SYM);
-
-                this._readWhitespace();
-                return result;
-            },
-
-            _expr: function(inFunction){
-                /*
-                 * expr
-                 *   : term [ operator term ]*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    values      = [],
-                    //valueParts    = [],
-                    value       = null,
-                    operator    = null;
-
-                value = this._term();
-                if (value !== null){
-
-                    values.push(value);
-
-                    do {
-                        operator = this._operator(inFunction);
-
-                        //if there's an operator, keep building up the value parts
-                        if (operator){
-                            values.push(operator);
-                        } /*else {
-                            //if there's not an operator, you have a full value
-                            values.push(new PropertyValue(valueParts, valueParts[0].line, valueParts[0].col));
-                            valueParts = [];
-                        }*/
-
-                        value = this._term();
-
-                        if (value === null){
-                            break;
-                        } else {
-                            values.push(value);
-                        }
-                    } while(true);
-                }
-
-                //cleanup
-                /*if (valueParts.length){
-                    values.push(new PropertyValue(valueParts, valueParts[0].line, valueParts[0].col));
-                }*/
-
-                return values.length > 0 ? new PropertyValue(values, values[0].line, values[0].col) : null;
-            },
-
-            _term: function(){
-
-                /*
-                 * term
-                 *   : unary_operator?
-                 *     [ NUMBER S* | PERCENTAGE S* | LENGTH S* | ANGLE S* |
-                 *       TIME S* | FREQ S* | function | ie_function ]
-                 *   | STRING S* | IDENT S* | URI S* | UNICODERANGE S* | hexcolor
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    unary       = null,
-                    value       = null,
-                    token,
-                    line,
-                    col;
-
-                //returns the operator or null
-                unary = this._unary_operator();
-                if (unary !== null){
-                    line = tokenStream.token().startLine;
-                    col = tokenStream.token().startCol;
-                }
-
-                //exception for IE filters
-                if (tokenStream.peek() == Tokens.IE_FUNCTION && this.options.ieFilters){
-
-                    value = this._ie_function();
-                    if (unary === null){
-                        line = tokenStream.token().startLine;
-                        col = tokenStream.token().startCol;
-                    }
-
-                //see if there's a simple match
-                } else if (tokenStream.match([Tokens.NUMBER, Tokens.PERCENTAGE, Tokens.LENGTH,
-                        Tokens.ANGLE, Tokens.TIME,
-                        Tokens.FREQ, Tokens.STRING, Tokens.IDENT, Tokens.URI, Tokens.UNICODE_RANGE])){
-
-                    value = tokenStream.token().value;
-                    if (unary === null){
-                        line = tokenStream.token().startLine;
-                        col = tokenStream.token().startCol;
-                    }
-                    this._readWhitespace();
-                } else {
-
-                    //see if it's a color
-                    token = this._hexcolor();
-                    if (token === null){
-
-                        //if there's no unary, get the start of the next token for line/col info
-                        if (unary === null){
-                            line = tokenStream.LT(1).startLine;
-                            col = tokenStream.LT(1).startCol;
-                        }
-
-                        //has to be a function
-                        if (value === null){
-
-                            /*
-                             * This checks for alpha(opacity=0) style of IE
-                             * functions. IE_FUNCTION only presents progid: style.
-                             */
-                            if (tokenStream.LA(3) == Tokens.EQUALS && this.options.ieFilters){
-                                value = this._ie_function();
-                            } else {
-                                value = this._function();
-                            }
-                        }
-
-                        /*if (value === null){
-                            return null;
-                            //throw new Error("Expected identifier at line " + tokenStream.token().startLine + ", character " +  tokenStream.token().startCol + ".");
-                        }*/
-
-                    } else {
-                        value = token.value;
-                        if (unary === null){
-                            line = token.startLine;
-                            col = token.startCol;
-                        }
-                    }
-
-                }
-
-                return value !== null ?
-                        new PropertyValuePart(unary !== null ? unary + value : value, line, col) :
-                        null;
-
-            },
-
-            _function: function(){
-
-                /*
-                 * function
-                 *   : FUNCTION S* expr ')' S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    functionText = null,
-                    expr        = null,
-                    lt;
-
-                if (tokenStream.match(Tokens.FUNCTION)){
-                    functionText = tokenStream.token().value;
-                    this._readWhitespace();
-                    expr = this._expr(true);
-                    functionText += expr;
-
-                    //START: Horrible hack in case it's an IE filter
-                    if (this.options.ieFilters && tokenStream.peek() == Tokens.EQUALS){
-                        do {
-
-                            if (this._readWhitespace()){
-                                functionText += tokenStream.token().value;
-                            }
-
-                            //might be second time in the loop
-                            if (tokenStream.LA(0) == Tokens.COMMA){
-                                functionText += tokenStream.token().value;
-                            }
-
-                            tokenStream.match(Tokens.IDENT);
-                            functionText += tokenStream.token().value;
-
-                            tokenStream.match(Tokens.EQUALS);
-                            functionText += tokenStream.token().value;
-
-                            //functionText += this._term();
-                            lt = tokenStream.peek();
-                            while(lt != Tokens.COMMA && lt != Tokens.S && lt != Tokens.RPAREN){
-                                tokenStream.get();
-                                functionText += tokenStream.token().value;
-                                lt = tokenStream.peek();
-                            }
-                        } while(tokenStream.match([Tokens.COMMA, Tokens.S]));
-                    }
-
-                    //END: Horrible Hack
-
-                    tokenStream.match(Tokens.RPAREN);
-                    functionText += ")";
-                    this._readWhitespace();
-                }
-
-                return functionText;
-            },
-
-            _ie_function: function(){
-
-                /* (My own extension)
-                 * ie_function
-                 *   : IE_FUNCTION S* IDENT '=' term [S* ','? IDENT '=' term]+ ')' S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    functionText = null,
-                    expr        = null,
-                    lt;
-
-                //IE function can begin like a regular function, too
-                if (tokenStream.match([Tokens.IE_FUNCTION, Tokens.FUNCTION])){
-                    functionText = tokenStream.token().value;
-
-                    do {
-
-                        if (this._readWhitespace()){
-                            functionText += tokenStream.token().value;
-                        }
-
-                        //might be second time in the loop
-                        if (tokenStream.LA(0) == Tokens.COMMA){
-                            functionText += tokenStream.token().value;
-                        }
-
-                        tokenStream.match(Tokens.IDENT);
-                        functionText += tokenStream.token().value;
-
-                        tokenStream.match(Tokens.EQUALS);
-                        functionText += tokenStream.token().value;
-
-                        //functionText += this._term();
-                        lt = tokenStream.peek();
-                        while(lt != Tokens.COMMA && lt != Tokens.S && lt != Tokens.RPAREN){
-                            tokenStream.get();
-                            functionText += tokenStream.token().value;
-                            lt = tokenStream.peek();
-                        }
-                    } while(tokenStream.match([Tokens.COMMA, Tokens.S]));
-
-                    tokenStream.match(Tokens.RPAREN);
-                    functionText += ")";
-                    this._readWhitespace();
-                }
-
-                return functionText;
-            },
-
-            _hexcolor: function(){
-                /*
-                 * There is a constraint on the color that it must
-                 * have either 3 or 6 hex-digits (i.e., [0-9a-fA-F])
-                 * after the "#"; e.g., "#000" is OK, but "#abcd" is not.
-                 *
-                 * hexcolor
-                 *   : HASH S*
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    token = null,
-                    color;
-
-                if(tokenStream.match(Tokens.HASH)){
-
-                    //need to do some validation here
-
-                    token = tokenStream.token();
-                    color = token.value;
-                    if (!/#[a-f0-9]{3,6}/i.test(color)){
-                        throw new SyntaxError("Expected a hex color but found '" + color + "' at line " + token.startLine + ", col " + token.startCol + ".", token.startLine, token.startCol);
-                    }
-                    this._readWhitespace();
-                }
-
-                return token;
-            },
-
-            //-----------------------------------------------------------------
-            // Animations methods
-            //-----------------------------------------------------------------
-
-            _keyframes: function(){
-
-                /*
-                 * keyframes:
-                 *   : KEYFRAMES_SYM S* keyframe_name S* '{' S* keyframe_rule* '}' {
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    token,
-                    tt,
-                    name,
-                    prefix = "";
-
-                tokenStream.mustMatch(Tokens.KEYFRAMES_SYM);
-                token = tokenStream.token();
-                if (/^@\-([^\-]+)\-/.test(token.value)) {
-                    prefix = RegExp.$1;
-                }
-
-                this._readWhitespace();
-                name = this._keyframe_name();
-
-                this._readWhitespace();
-                tokenStream.mustMatch(Tokens.LBRACE);
-
-                this.fire({
-                    type:   "startkeyframes",
-                    name:   name,
-                    prefix: prefix,
-                    line:   token.startLine,
-                    col:    token.startCol
-                });
-
-                this._readWhitespace();
-                tt = tokenStream.peek();
-
-                //check for key
-                while(tt == Tokens.IDENT || tt == Tokens.PERCENTAGE) {
-                    this._keyframe_rule();
-                    this._readWhitespace();
-                    tt = tokenStream.peek();
-                }
-
-                this.fire({
-                    type:   "endkeyframes",
-                    name:   name,
-                    prefix: prefix,
-                    line:   token.startLine,
-                    col:    token.startCol
-                });
-
-                this._readWhitespace();
-                tokenStream.mustMatch(Tokens.RBRACE);
-
-            },
-
-            _keyframe_name: function(){
-
-                /*
-                 * keyframe_name:
-                 *   : IDENT
-                 *   | STRING
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    token;
-
-                tokenStream.mustMatch([Tokens.IDENT, Tokens.STRING]);
-                return SyntaxUnit.fromToken(tokenStream.token());
-            },
-
-            _keyframe_rule: function(){
-
-                /*
-                 * keyframe_rule:
-                 *   : key_list S*
-                 *     '{' S* declaration [ ';' S* declaration ]* '}' S*
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    token,
-                    keyList = this._key_list();
-
-                this.fire({
-                    type:   "startkeyframerule",
-                    keys:   keyList,
-                    line:   keyList[0].line,
-                    col:    keyList[0].col
-                });
-
-                this._readDeclarations(true);
-
-                this.fire({
-                    type:   "endkeyframerule",
-                    keys:   keyList,
-                    line:   keyList[0].line,
-                    col:    keyList[0].col
-                });
-
-            },
-
-            _key_list: function(){
-
-                /*
-                 * key_list:
-                 *   : key [ S* ',' S* key]*
-                 *   ;
-                 */
-                var tokenStream = this._tokenStream,
-                    token,
-                    key,
-                    keyList = [];
-
-                //must be least one key
-                keyList.push(this._key());
-
-                this._readWhitespace();
-
-                while(tokenStream.match(Tokens.COMMA)){
-                    this._readWhitespace();
-                    keyList.push(this._key());
-                    this._readWhitespace();
-                }
-
-                return keyList;
-            },
-
-            _key: function(){
-                /*
-                 * There is a restriction that IDENT can be only "from" or "to".
-                 *
-                 * key
-                 *   : PERCENTAGE
-                 *   | IDENT
-                 *   ;
-                 */
-
-                var tokenStream = this._tokenStream,
-                    token;
-
-                if (tokenStream.match(Tokens.PERCENTAGE)){
-                    return SyntaxUnit.fromToken(tokenStream.token());
-                } else if (tokenStream.match(Tokens.IDENT)){
-                    token = tokenStream.token();
-
-                    if (/from|to/i.test(token.value)){
-                        return SyntaxUnit.fromToken(token);
-                    }
-
-                    tokenStream.unget();
-                }
-
-                //if it gets here, there wasn't a valid token, so time to explode
-                this._unexpectedToken(tokenStream.LT(1));
-            },
-
-            //-----------------------------------------------------------------
-            // Helper methods
-            //-----------------------------------------------------------------
-
-            /**
-             * Not part of CSS grammar, but useful for skipping over
-             * combination of white space and HTML-style comments.
-             * @return {void}
-             * @method _skipCruft
-             * @private
-             */
-            _skipCruft: function(){
-                while(this._tokenStream.match([Tokens.S, Tokens.CDO, Tokens.CDC])){
-                    //noop
-                }
-            },
-
-            /**
-             * Not part of CSS grammar, but this pattern occurs frequently
-             * in the official CSS grammar. Split out here to eliminate
-             * duplicate code.
-             * @param {Boolean} checkStart Indicates if the rule should check
-             *      for the left brace at the beginning.
-             * @param {Boolean} readMargins Indicates if the rule should check
-             *      for margin patterns.
-             * @return {void}
-             * @method _readDeclarations
-             * @private
-             */
-            _readDeclarations: function(checkStart, readMargins){
-                /*
-                 * Reads the pattern
-                 * S* '{' S* declaration [ ';' S* declaration ]* '}' S*
-                 * or
-                 * S* '{' S* [ declaration | margin ]? [ ';' S* [ declaration | margin ]? ]* '}' S*
-                 * Note that this is how it is described in CSS3 Paged Media, but is actually incorrect.
-                 * A semicolon is only necessary following a declaration is there's another declaration
-                 * or margin afterwards.
-                 */
-                var tokenStream = this._tokenStream,
-                    tt;
-
-
-                this._readWhitespace();
-
-                if (checkStart){
-                    tokenStream.mustMatch(Tokens.LBRACE);
-                }
-
-                this._readWhitespace();
-
-                try {
-
-                    while(true){
-
-                        if (tokenStream.match(Tokens.SEMICOLON) || (readMargins && this._margin())){
-                            //noop
-                        } else if (this._declaration()){
-                            if (!tokenStream.match(Tokens.SEMICOLON)){
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-
-                        //if ((!this._margin() && !this._declaration()) || !tokenStream.match(Tokens.SEMICOLON)){
-                        //    break;
-                        //}
-                        this._readWhitespace();
-                    }
-
-                    tokenStream.mustMatch(Tokens.RBRACE);
-                    this._readWhitespace();
-
-                } catch (ex) {
-                    if (ex instanceof SyntaxError && !this.options.strict){
-
-                        //fire error event
-                        this.fire({
-                            type:       "error",
-                            error:      ex,
-                            message:    ex.message,
-                            line:       ex.line,
-                            col:        ex.col
-                        });
-
-                        //see if there's another declaration
-                        tt = tokenStream.advance([Tokens.SEMICOLON, Tokens.RBRACE]);
-                        if (tt == Tokens.SEMICOLON){
-                            //if there's a semicolon, then there might be another declaration
-                            this._readDeclarations(false, readMargins);
-                        } else if (tt != Tokens.RBRACE){
-                            //if there's a right brace, the rule is finished so don't do anything
-                            //otherwise, rethrow the error because it wasn't handled properly
-                            throw ex;
-                        }
-
-                    } else {
-                        //not a syntax error, rethrow it
-                        throw ex;
-                    }
-                }
-
-            },
-
-            /**
-             * In some cases, you can end up with two white space tokens in a
-             * row. Instead of making a change in every function that looks for
-             * white space, this function is used to match as much white space
-             * as necessary.
-             * @method _readWhitespace
-             * @return {String} The white space if found, empty string if not.
-             * @private
-             */
-            _readWhitespace: function(){
-
-                var tokenStream = this._tokenStream,
-                    ws = "";
-
-                while(tokenStream.match(Tokens.S)){
-                    ws += tokenStream.token().value;
-                }
-
-                return ws;
-            },
-
-
-            /**
-             * Throws an error when an unexpected token is found.
-             * @param {Object} token The token that was found.
-             * @method _unexpectedToken
-             * @return {void}
-             * @private
-             */
-            _unexpectedToken: function(token){
-                throw new SyntaxError("Unexpected token '" + token.value + "' at line " + token.startLine + ", col " + token.startCol + ".", token.startLine, token.startCol);
-            },
-
-            /**
-             * Helper method used for parsing subparts of a style sheet.
-             * @return {void}
-             * @method _verifyEnd
-             * @private
-             */
-            _verifyEnd: function(){
-                if (this._tokenStream.LA(1) != Tokens.EOF){
-                    this._unexpectedToken(this._tokenStream.LT(1));
-                }
-            },
-
-            //-----------------------------------------------------------------
-            // Validation methods
-            //-----------------------------------------------------------------
-            _validateProperty: function(property, value){
-                Validation.validate(property, value);
-            },
-
-            //-----------------------------------------------------------------
-            // Parsing methods
-            //-----------------------------------------------------------------
-
-            parse: function(input){
-                this._tokenStream = new TokenStream(input, Tokens);
-                this._stylesheet();
-            },
-
-            parseStyleSheet: function(input){
-                //just passthrough
-                return this.parse(input);
-            },
-
-            parseMediaQuery: function(input){
-                this._tokenStream = new TokenStream(input, Tokens);
-                var result = this._media_query();
-
-                //if there's anything more, then it's an invalid selector
-                this._verifyEnd();
-
-                //otherwise return result
-                return result;
-            },
-
-            /**
-             * Parses a property value (everything after the semicolon).
-             * @return {parserlib.css.PropertyValue} The property value.
-             * @throws parserlib.util.SyntaxError If an unexpected token is found.
-             * @method parserPropertyValue
-             */
-            parsePropertyValue: function(input){
-
-                this._tokenStream = new TokenStream(input, Tokens);
-                this._readWhitespace();
-
-                var result = this._expr();
-
-                //okay to have a trailing white space
-                this._readWhitespace();
-
-                //if there's anything more, then it's an invalid selector
-                this._verifyEnd();
-
-                //otherwise return result
-                return result;
-            },
-
-            /**
-             * Parses a complete CSS rule, including selectors and
-             * properties.
-             * @param {String} input The text to parser.
-             * @return {Boolean} True if the parse completed successfully, false if not.
-             * @method parseRule
-             */
-            parseRule: function(input){
-                this._tokenStream = new TokenStream(input, Tokens);
-
-                //skip any leading white space
-                this._readWhitespace();
-
-                var result = this._ruleset();
-
-                //skip any trailing white space
-                this._readWhitespace();
-
-                //if there's anything more, then it's an invalid selector
-                this._verifyEnd();
-
-                //otherwise return result
-                return result;
-            },
-
-            /**
-             * Parses a single CSS selector (no comma)
-             * @param {String} input The text to parse as a CSS selector.
-             * @return {Selector} An object representing the selector.
-             * @throws parserlib.util.SyntaxError If an unexpected token is found.
-             * @method parseSelector
-             */
-            parseSelector: function(input){
-
-                this._tokenStream = new TokenStream(input, Tokens);
-
-                //skip any leading white space
-                this._readWhitespace();
-
-                var result = this._selector();
-
-                //skip any trailing white space
-                this._readWhitespace();
-
-                //if there's anything more, then it's an invalid selector
-                this._verifyEnd();
-
-                //otherwise return result
-                return result;
-            },
-
-            /**
-             * Parses an HTML style attribute: a set of CSS declarations
-             * separated by semicolons.
-             * @param {String} input The text to parse as a style attribute
-             * @return {void}
-             * @method parseStyleAttribute
-             */
-            parseStyleAttribute: function(input){
-                input += "}"; // for error recovery in _readDeclarations()
-                this._tokenStream = new TokenStream(input, Tokens);
-                this._readDeclarations();
-            }
-        };
-
-    //copy over onto prototype
-    for (prop in additions){
-        if (additions.hasOwnProperty(prop)){
-            proto[prop] = additions[prop];
-        }
-    }
-
-    return proto;
-}();
-
-
-/*
-nth
-  : S* [ ['-'|'+']? INTEGER? {N} [ S* ['-'|'+'] S* INTEGER ]? |
-         ['-'|'+']? INTEGER | {O}{D}{D} | {E}{V}{E}{N} ] S*
-  ;
-*/
-
-/*global Validation, ValidationTypes, ValidationError*/
-var Properties = {
-
-    //A
-    "alignment-adjust"              : "auto | baseline | before-edge | text-before-edge | middle | central | after-edge | text-after-edge | ideographic | alphabetic | hanging | mathematical | <percentage> | <length>",
-    "alignment-baseline"            : "baseline | use-script | before-edge | text-before-edge | after-edge | text-after-edge | central | middle | ideographic | alphabetic | hanging | mathematical",
-    "animation"                     : 1,
-    "animation-delay"               : { multi: "<time>", comma: true },
-    "animation-direction"           : { multi: "normal | alternate", comma: true },
-    "animation-duration"            : { multi: "<time>", comma: true },
-    "animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
-    "animation-name"                : { multi: "none | <ident>", comma: true },
-    "animation-play-state"          : { multi: "running | paused", comma: true },
-    "animation-timing-function"     : 1,
-
-    //vendor prefixed
-    "-moz-animation-delay"               : { multi: "<time>", comma: true },
-    "-moz-animation-direction"           : { multi: "normal | alternate", comma: true },
-    "-moz-animation-duration"            : { multi: "<time>", comma: true },
-    "-moz-animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
-    "-moz-animation-name"                : { multi: "none | <ident>", comma: true },
-    "-moz-animation-play-state"          : { multi: "running | paused", comma: true },
-
-    "-ms-animation-delay"               : { multi: "<time>", comma: true },
-    "-ms-animation-direction"           : { multi: "normal | alternate", comma: true },
-    "-ms-animation-duration"            : { multi: "<time>", comma: true },
-    "-ms-animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
-    "-ms-animation-name"                : { multi: "none | <ident>", comma: true },
-    "-ms-animation-play-state"          : { multi: "running | paused", comma: true },
-
-    "-webkit-animation-delay"               : { multi: "<time>", comma: true },
-    "-webkit-animation-direction"           : { multi: "normal | alternate", comma: true },
-    "-webkit-animation-duration"            : { multi: "<time>", comma: true },
-    "-webkit-animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
-    "-webkit-animation-name"                : { multi: "none | <ident>", comma: true },
-    "-webkit-animation-play-state"          : { multi: "running | paused", comma: true },
-
-    "-o-animation-delay"               : { multi: "<time>", comma: true },
-    "-o-animation-direction"           : { multi: "normal | alternate", comma: true },
-    "-o-animation-duration"            : { multi: "<time>", comma: true },
-    "-o-animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
-    "-o-animation-name"                : { multi: "none | <ident>", comma: true },
-    "-o-animation-play-state"          : { multi: "running | paused", comma: true },
-
-    "appearance"                    : "icon | window | desktop | workspace | document | tooltip | dialog | button | push-button | hyperlink | radio-button | checkbox | menu-item | tab | menu | menubar | pull-down-menu | pop-up-menu | list-menu | radio-group | checkbox-group | outline-tree | range | field | combo-box | signature | password | normal | none | inherit",
-    "azimuth"                       : function (expression) {
-        var simple      = "<angle> | leftwards | rightwards | inherit",
-            direction   = "left-side | far-left | left | center-left | center | center-right | right | far-right | right-side",
-            behind      = false,
-            valid       = false,
-            part;
-
-        if (!ValidationTypes.isAny(expression, simple)) {
-            if (ValidationTypes.isAny(expression, "behind")) {
-                behind = true;
-                valid = true;
-            }
-
-            if (ValidationTypes.isAny(expression, direction)) {
-                valid = true;
-                if (!behind) {
-                    ValidationTypes.isAny(expression, "behind");
-                }
-            }
-        }
-
-        if (expression.hasNext()) {
-            part = expression.next();
-            if (valid) {
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                throw new ValidationError("Expected (<'azimuth'>) but found '" + part + "'.", part.line, part.col);
-            }
-        }
-    },
-
-    //B
-    "backface-visibility"           : "visible | hidden",
-    "background"                    : 1,
-    "background-attachment"         : { multi: "<attachment>", comma: true },
-    "background-clip"               : { multi: "<box>", comma: true },
-    "background-color"              : "<color> | inherit",
-    "background-image"              : { multi: "<bg-image>", comma: true },
-    "background-origin"             : { multi: "<box>", comma: true },
-    "background-position"           : { multi: "<bg-position>", comma: true },
-    "background-repeat"             : { multi: "<repeat-style>" },
-    "background-size"               : { multi: "<bg-size>", comma: true },
-    "baseline-shift"                : "baseline | sub | super | <percentage> | <length>",
-    "behavior"                      : 1,
-    "binding"                       : 1,
-    "bleed"                         : "<length>",
-    "bookmark-label"                : "<content> | <attr> | <string>",
-    "bookmark-level"                : "none | <integer>",
-    "bookmark-state"                : "open | closed",
-    "bookmark-target"               : "none | <uri> | <attr>",
-    "border"                        : "<border-width> || <border-style> || <color>",
-    "border-bottom"                 : "<border-width> || <border-style> || <color>",
-    "border-bottom-color"           : "<color> | inherit",
-    "border-bottom-left-radius"     :  "<x-one-radius>",
-    "border-bottom-right-radius"    :  "<x-one-radius>",
-    "border-bottom-style"           : "<border-style>",
-    "border-bottom-width"           : "<border-width>",
-    "border-collapse"               : "collapse | separate | inherit",
-    "border-color"                  : { multi: "<color> | inherit", max: 4 },
-    "border-image"                  : 1,
-    "border-image-outset"           : { multi: "<length> | <number>", max: 4 },
-    "border-image-repeat"           : { multi: "stretch | repeat | round", max: 2 },
-    "border-image-slice"            : function(expression) {
-
-        var valid   = false,
-            numeric = "<number> | <percentage>",
-            fill    = false,
-            count   = 0,
-            max     = 4,
-            part;
-
-        if (ValidationTypes.isAny(expression, "fill")) {
-            fill = true;
-            valid = true;
-        }
-
-        while (expression.hasNext() && count < max) {
-            valid = ValidationTypes.isAny(expression, numeric);
-            if (!valid) {
-                break;
-            }
-            count++;
-        }
-
-
-        if (!fill) {
-            ValidationTypes.isAny(expression, "fill");
-        } else {
-            valid = true;
-        }
-
-        if (expression.hasNext()) {
-            part = expression.next();
-            if (valid) {
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                throw new ValidationError("Expected ([<number> | <percentage>]{1,4} && fill?) but found '" + part + "'.", part.line, part.col);
-            }
-        }
-    },
-    "border-image-source"           : "<image> | none",
-    "border-image-width"            : { multi: "<length> | <percentage> | <number> | auto", max: 4 },
-    "border-left"                   : "<border-width> || <border-style> || <color>",
-    "border-left-color"             : "<color> | inherit",
-    "border-left-style"             : "<border-style>",
-    "border-left-width"             : "<border-width>",
-    "border-radius"                 : function(expression) {
-
-        var valid   = false,
-            simple = "<length> | <percentage> | inherit",
-            slash   = false,
-            fill    = false,
-            count   = 0,
-            max     = 8,
-            part;
-
-        while (expression.hasNext() && count < max) {
-            valid = ValidationTypes.isAny(expression, simple);
-            if (!valid) {
-
-                if (expression.peek() == "/" && count > 0 && !slash) {
-                    slash = true;
-                    max = count + 5;
-                    expression.next();
-                } else {
-                    break;
-                }
-            }
-            count++;
-        }
-
-        if (expression.hasNext()) {
-            part = expression.next();
-            if (valid) {
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                throw new ValidationError("Expected (<'border-radius'>) but found '" + part + "'.", part.line, part.col);
-            }
-        }
-    },
-    "border-right"                  : "<border-width> || <border-style> || <color>",
-    "border-right-color"            : "<color> | inherit",
-    "border-right-style"            : "<border-style>",
-    "border-right-width"            : "<border-width>",
-    "border-spacing"                : { multi: "<length> | inherit", max: 2 },
-    "border-style"                  : { multi: "<border-style>", max: 4 },
-    "border-top"                    : "<border-width> || <border-style> || <color>",
-    "border-top-color"              : "<color> | inherit",
-    "border-top-left-radius"        : "<x-one-radius>",
-    "border-top-right-radius"       : "<x-one-radius>",
-    "border-top-style"              : "<border-style>",
-    "border-top-width"              : "<border-width>",
-    "border-width"                  : { multi: "<border-width>", max: 4 },
-    "bottom"                        : "<margin-width> | inherit",
-    "box-align"                     : "start | end | center | baseline | stretch",        //http://www.w3.org/TR/2009/WD-css3-flexbox-20090723/
-    "box-decoration-break"          : "slice |clone",
-    "box-direction"                 : "normal | reverse | inherit",
-    "box-flex"                      : "<number>",
-    "box-flex-group"                : "<integer>",
-    "box-lines"                     : "single | multiple",
-    "box-ordinal-group"             : "<integer>",
-    "box-orient"                    : "horizontal | vertical | inline-axis | block-axis | inherit",
-    "box-pack"                      : "start | end | center | justify",
-    "box-shadow"                    : function (expression) {
-        var result      = false,
-            part;
-
-        if (!ValidationTypes.isAny(expression, "none")) {
-            Validation.multiProperty("<shadow>", expression, true, Infinity);
-        } else {
-            if (expression.hasNext()) {
-                part = expression.next();
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            }
-        }
-    },
-    "box-sizing"                    : "content-box | border-box | inherit",
-    "break-after"                   : "auto | always | avoid | left | right | page | column | avoid-page | avoid-column",
-    "break-before"                  : "auto | always | avoid | left | right | page | column | avoid-page | avoid-column",
-    "break-inside"                  : "auto | avoid | avoid-page | avoid-column",
-
-    //C
-    "caption-side"                  : "top | bottom | inherit",
-    "clear"                         : "none | right | left | both | inherit",
-    "clip"                          : 1,
-    "color"                         : "<color> | inherit",
-    "color-profile"                 : 1,
-    "column-count"                  : "<integer> | auto",                      //http://www.w3.org/TR/css3-multicol/
-    "column-fill"                   : "auto | balance",
-    "column-gap"                    : "<length> | normal",
-    "column-rule"                   : "<border-width> || <border-style> || <color>",
-    "column-rule-color"             : "<color>",
-    "column-rule-style"             : "<border-style>",
-    "column-rule-width"             : "<border-width>",
-    "column-span"                   : "none | all",
-    "column-width"                  : "<length> | auto",
-    "columns"                       : 1,
-    "content"                       : 1,
-    "counter-increment"             : 1,
-    "counter-reset"                 : 1,
-    "crop"                          : "<shape> | auto",
-    "cue"                           : "cue-after | cue-before | inherit",
-    "cue-after"                     : 1,
-    "cue-before"                    : 1,
-    "cursor"                        : 1,
-
-    //D
-    "direction"                     : "ltr | rtl | inherit",
-    "display"                       : "inline | block | list-item | inline-block | table | inline-table | table-row-group | table-header-group | table-footer-group | table-row | table-column-group | table-column | table-cell | table-caption | box | inline-box | grid | inline-grid | none | inherit | -moz-box | -moz-inline-block | -moz-inline-box | -moz-inline-grid | -moz-inline-stack | -moz-inline-table | -moz-grid | -moz-grid-group | -moz-grid-line | -moz-groupbox | -moz-deck | -moz-popup | -moz-stack | -moz-marker | -webkit-box | -webkit-inline-box",
-    "dominant-baseline"             : 1,
-    "drop-initial-after-adjust"     : "central | middle | after-edge | text-after-edge | ideographic | alphabetic | mathematical | <percentage> | <length>",
-    "drop-initial-after-align"      : "baseline | use-script | before-edge | text-before-edge | after-edge | text-after-edge | central | middle | ideographic | alphabetic | hanging | mathematical",
-    "drop-initial-before-adjust"    : "before-edge | text-before-edge | central | middle | hanging | mathematical | <percentage> | <length>",
-    "drop-initial-before-align"     : "caps-height | baseline | use-script | before-edge | text-before-edge | after-edge | text-after-edge | central | middle | ideographic | alphabetic | hanging | mathematical",
-    "drop-initial-size"             : "auto | line | <length> | <percentage>",
-    "drop-initial-value"            : "initial | <integer>",
-
-    //E
-    "elevation"                     : "<angle> | below | level | above | higher | lower | inherit",
-    "empty-cells"                   : "show | hide | inherit",
-
-    //F
-    "filter"                        : 1,
-    "fit"                           : "fill | hidden | meet | slice",
-    "fit-position"                  : 1,
-    "float"                         : "left | right | none | inherit",
-    "float-offset"                  : 1,
-    "font"                          : 1,
-    "font-family"                   : 1,
-    "font-size"                     : "<absolute-size> | <relative-size> | <length> | <percentage> | inherit",
-    "font-size-adjust"              : "<number> | none | inherit",
-    "font-stretch"                  : "normal | ultra-condensed | extra-condensed | condensed | semi-condensed | semi-expanded | expanded | extra-expanded | ultra-expanded | inherit",
-    "font-style"                    : "normal | italic | oblique | inherit",
-    "font-variant"                  : "normal | small-caps | inherit",
-    "font-weight"                   : "normal | bold | bolder | lighter | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | inherit",
-
-    //G
-    "grid-cell-stacking"            : "columns | rows | layer",
-    "grid-column"                   : 1,
-    "grid-columns"                  : 1,
-    "grid-column-align"             : "start | end | center | stretch",
-    "grid-column-sizing"            : 1,
-    "grid-column-span"              : "<integer>",
-    "grid-flow"                     : "none | rows | columns",
-    "grid-layer"                    : "<integer>",
-    "grid-row"                      : 1,
-    "grid-rows"                     : 1,
-    "grid-row-align"                : "start | end | center | stretch",
-    "grid-row-span"                 : "<integer>",
-    "grid-row-sizing"               : 1,
-
-    //H
-    "hanging-punctuation"           : 1,
-    "height"                        : "<margin-width> | inherit",
-    "hyphenate-after"               : "<integer> | auto",
-    "hyphenate-before"              : "<integer> | auto",
-    "hyphenate-character"           : "<string> | auto",
-    "hyphenate-lines"               : "no-limit | <integer>",
-    "hyphenate-resource"            : 1,
-    "hyphens"                       : "none | manual | auto",
-
-    //I
-    "icon"                          : 1,
-    "image-orientation"             : "angle | auto",
-    "image-rendering"               : 1,
-    "image-resolution"              : 1,
-    "inline-box-align"              : "initial | last | <integer>",
-
-    //L
-    "left"                          : "<margin-width> | inherit",
-    "letter-spacing"                : "<length> | normal | inherit",
-    "line-height"                   : "<number> | <length> | <percentage> | normal | inherit",
-    "line-break"                    : "auto | loose | normal | strict",
-    "line-stacking"                 : 1,
-    "line-stacking-ruby"            : "exclude-ruby | include-ruby",
-    "line-stacking-shift"           : "consider-shifts | disregard-shifts",
-    "line-stacking-strategy"        : "inline-line-height | block-line-height | max-height | grid-height",
-    "list-style"                    : 1,
-    "list-style-image"              : "<uri> | none | inherit",
-    "list-style-position"           : "inside | outside | inherit",
-    "list-style-type"               : "disc | circle | square | decimal | decimal-leading-zero | lower-roman | upper-roman | lower-greek | lower-latin | upper-latin | armenian | georgian | lower-alpha | upper-alpha | none | inherit",
-
-    //M
-    "margin"                        : { multi: "<margin-width> | inherit", max: 4 },
-    "margin-bottom"                 : "<margin-width> | inherit",
-    "margin-left"                   : "<margin-width> | inherit",
-    "margin-right"                  : "<margin-width> | inherit",
-    "margin-top"                    : "<margin-width> | inherit",
-    "mark"                          : 1,
-    "mark-after"                    : 1,
-    "mark-before"                   : 1,
-    "marks"                         : 1,
-    "marquee-direction"             : 1,
-    "marquee-play-count"            : 1,
-    "marquee-speed"                 : 1,
-    "marquee-style"                 : 1,
-    "max-height"                    : "<length> | <percentage> | none | inherit",
-    "max-width"                     : "<length> | <percentage> | none | inherit",
-    "min-height"                    : "<length> | <percentage> | inherit",
-    "min-width"                     : "<length> | <percentage> | inherit",
-    "move-to"                       : 1,
-
-    //N
-    "nav-down"                      : 1,
-    "nav-index"                     : 1,
-    "nav-left"                      : 1,
-    "nav-right"                     : 1,
-    "nav-up"                        : 1,
-
-    //O
-    "opacity"                       : "<number> | inherit",
-    "orphans"                       : "<integer> | inherit",
-    "outline"                       : 1,
-    "outline-color"                 : "<color> | invert | inherit",
-    "outline-offset"                : 1,
-    "outline-style"                 : "<border-style> | inherit",
-    "outline-width"                 : "<border-width> | inherit",
-    "overflow"                      : "visible | hidden | scroll | auto | inherit",
-    "overflow-style"                : 1,
-    "overflow-x"                    : 1,
-    "overflow-y"                    : 1,
-
-    //P
-    "padding"                       : { multi: "<padding-width> | inherit", max: 4 },
-    "padding-bottom"                : "<padding-width> | inherit",
-    "padding-left"                  : "<padding-width> | inherit",
-    "padding-right"                 : "<padding-width> | inherit",
-    "padding-top"                   : "<padding-width> | inherit",
-    "page"                          : 1,
-    "page-break-after"              : "auto | always | avoid | left | right | inherit",
-    "page-break-before"             : "auto | always | avoid | left | right | inherit",
-    "page-break-inside"             : "auto | avoid | inherit",
-    "page-policy"                   : 1,
-    "pause"                         : 1,
-    "pause-after"                   : 1,
-    "pause-before"                  : 1,
-    "perspective"                   : 1,
-    "perspective-origin"            : 1,
-    "phonemes"                      : 1,
-    "pitch"                         : 1,
-    "pitch-range"                   : 1,
-    "play-during"                   : 1,
-    "pointer-events"                : "auto | none | visiblePainted | visibleFill | visibleStroke | visible | painted | fill | stroke | all | inherit",
-    "position"                      : "static | relative | absolute | fixed | inherit",
-    "presentation-level"            : 1,
-    "punctuation-trim"              : 1,
-
-    //Q
-    "quotes"                        : 1,
-
-    //R
-    "rendering-intent"              : 1,
-    "resize"                        : 1,
-    "rest"                          : 1,
-    "rest-after"                    : 1,
-    "rest-before"                   : 1,
-    "richness"                      : 1,
-    "right"                         : "<margin-width> | inherit",
-    "rotation"                      : 1,
-    "rotation-point"                : 1,
-    "ruby-align"                    : 1,
-    "ruby-overhang"                 : 1,
-    "ruby-position"                 : 1,
-    "ruby-span"                     : 1,
-
-    //S
-    "size"                          : 1,
-    "speak"                         : "normal | none | spell-out | inherit",
-    "speak-header"                  : "once | always | inherit",
-    "speak-numeral"                 : "digits | continuous | inherit",
-    "speak-punctuation"             : "code | none | inherit",
-    "speech-rate"                   : 1,
-    "src"                           : 1,
-    "stress"                        : 1,
-    "string-set"                    : 1,
-
-    "table-layout"                  : "auto | fixed | inherit",
-    "tab-size"                      : "<integer> | <length>",
-    "target"                        : 1,
-    "target-name"                   : 1,
-    "target-new"                    : 1,
-    "target-position"               : 1,
-    "text-align"                    : "left | right | center | justify | inherit" ,
-    "text-align-last"               : 1,
-    "text-decoration"               : 1,
-    "text-emphasis"                 : 1,
-    "text-height"                   : 1,
-    "text-indent"                   : "<length> | <percentage> | inherit",
-    "text-justify"                  : "auto | none | inter-word | inter-ideograph | inter-cluster | distribute | kashida",
-    "text-outline"                  : 1,
-    "text-overflow"                 : 1,
-    "text-rendering"                : "auto | optimizeSpeed | optimizeLegibility | geometricPrecision | inherit",
-    "text-shadow"                   : 1,
-    "text-transform"                : "capitalize | uppercase | lowercase | none | inherit",
-    "text-wrap"                     : "normal | none | avoid",
-    "top"                           : "<margin-width> | inherit",
-    "transform"                     : 1,
-    "transform-origin"              : 1,
-    "transform-style"               : 1,
-    "transition"                    : 1,
-    "transition-delay"              : 1,
-    "transition-duration"           : 1,
-    "transition-property"           : 1,
-    "transition-timing-function"    : 1,
-
-    //U
-    "unicode-bidi"                  : "normal | embed | bidi-override | inherit",
-    "user-modify"                   : "read-only | read-write | write-only | inherit",
-    "user-select"                   : "none | text | toggle | element | elements | all | inherit",
-
-    //V
-    "vertical-align"                : "auto | use-script | baseline | sub | super | top | text-top | central | middle | bottom | text-bottom | <percentage> | <length>",
-    "visibility"                    : "visible | hidden | collapse | inherit",
-    "voice-balance"                 : 1,
-    "voice-duration"                : 1,
-    "voice-family"                  : 1,
-    "voice-pitch"                   : 1,
-    "voice-pitch-range"             : 1,
-    "voice-rate"                    : 1,
-    "voice-stress"                  : 1,
-    "voice-volume"                  : 1,
-    "volume"                        : 1,
-
-    //W
-    "white-space"                   : "normal | pre | nowrap | pre-wrap | pre-line | inherit | -pre-wrap | -o-pre-wrap | -moz-pre-wrap | -hp-pre-wrap", //http://perishablepress.com/wrapping-content/
-    "white-space-collapse"          : 1,
-    "widows"                        : "<integer> | inherit",
-    "width"                         : "<length> | <percentage> | auto | inherit" ,
-    "word-break"                    : "normal | keep-all | break-all",
-    "word-spacing"                  : "<length> | normal | inherit",
-    "word-wrap"                     : 1,
-
-    //Z
-    "z-index"                       : "<integer> | auto | inherit",
-    "zoom"                          : "<number> | <percentage> | normal"
-};
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a selector combinator (whitespace, +, >).
- * @namespace parserlib.css
- * @class PropertyName
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {String} text The text representation of the unit.
- * @param {String} hack The type of IE hack applied ("*", "_", or null).
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function PropertyName(text, hack, line, col){
-
-    SyntaxUnit.call(this, text, line, col, Parser.PROPERTY_NAME_TYPE);
-
-    /**
-     * The type of IE hack applied ("*", "_", or null).
-     * @type String
-     * @property hack
-     */
-    this.hack = hack;
-
-}
-
-PropertyName.prototype = new SyntaxUnit();
-PropertyName.prototype.constructor = PropertyName;
-PropertyName.prototype.toString = function(){
-    return (this.hack ? this.hack : "") + this.text;
-};
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a single part of a CSS property value, meaning that it represents
- * just everything single part between ":" and ";". If there are multiple values
- * separated by commas, this type represents just one of the values.
- * @param {String[]} parts An array of value parts making up this value.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- * @namespace parserlib.css
- * @class PropertyValue
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- */
-function PropertyValue(parts, line, col){
-
-    SyntaxUnit.call(this, parts.join(" "), line, col, Parser.PROPERTY_VALUE_TYPE);
-
-    /**
-     * The parts that make up the selector.
-     * @type Array
-     * @property parts
-     */
-    this.parts = parts;
-
-}
-
-PropertyValue.prototype = new SyntaxUnit();
-PropertyValue.prototype.constructor = PropertyValue;
-
-
-/*global SyntaxUnit, Parser*/
-/**
- * A utility class that allows for easy iteration over the various parts of a
- * property value.
- * @param {parserlib.css.PropertyValue} value The property value to iterate over.
- * @namespace parserlib.css
- * @class PropertyValueIterator
- * @constructor
- */
-function PropertyValueIterator(value){
-
-    /**
-     * Iterator value
-     * @type int
-     * @property _i
-     * @private
-     */
-    this._i = 0;
-
-    /**
-     * The parts that make up the value.
-     * @type Array
-     * @property _parts
-     * @private
-     */
-    this._parts = value.parts;
-
-    /**
-     * Keeps track of bookmarks along the way.
-     * @type Array
-     * @property _marks
-     * @private
-     */
-    this._marks = [];
-
-    /**
-     * Holds the original property value.
-     * @type parserlib.css.PropertyValue
-     * @property value
-     */
-    this.value = value;
-
-}
-
-/**
- * Returns the total number of parts in the value.
- * @return {int} The total number of parts in the value.
- * @method count
- */
-PropertyValueIterator.prototype.count = function(){
-    return this._parts.length;
-};
-
-/**
- * Indicates if the iterator is positioned at the first item.
- * @return {Boolean} True if positioned at first item, false if not.
- * @method isFirst
- */
-PropertyValueIterator.prototype.isFirst = function(){
-    return this._i === 0;
-};
-
-/**
- * Indicates if there are more parts of the property value.
- * @return {Boolean} True if there are more parts, false if not.
- * @method hasNext
- */
-PropertyValueIterator.prototype.hasNext = function(){
-    return (this._i < this._parts.length);
-};
-
-/**
- * Marks the current spot in the iteration so it can be restored to
- * later on.
- * @return {void}
- * @method mark
- */
-PropertyValueIterator.prototype.mark = function(){
-    this._marks.push(this._i);
-};
-
-/**
- * Returns the next part of the property value or null if there is no next
- * part. Does not move the internal counter forward.
- * @return {parserlib.css.PropertyValuePart} The next part of the property value or null if there is no next
- * part.
- * @method peek
- */
-PropertyValueIterator.prototype.peek = function(count){
-    return this.hasNext() ? this._parts[this._i + (count || 0)] : null;
-};
-
-/**
- * Returns the next part of the property value or null if there is no next
- * part.
- * @return {parserlib.css.PropertyValuePart} The next part of the property value or null if there is no next
- * part.
- * @method next
- */
-PropertyValueIterator.prototype.next = function(){
-    return this.hasNext() ? this._parts[this._i++] : null;
-};
-
-/**
- * Returns the previous part of the property value or null if there is no
- * previous part.
- * @return {parserlib.css.PropertyValuePart} The previous part of the
- * property value or null if there is no next part.
- * @method previous
- */
-PropertyValueIterator.prototype.previous = function(){
-    return this._i > 0 ? this._parts[--this._i] : null;
-};
-
-/**
- * Restores the last saved bookmark.
- * @return {void}
- * @method restore
- */
-PropertyValueIterator.prototype.restore = function(){
-    if (this._marks.length){
-        this._i = this._marks.pop();
-    }
-};
-
-
-/*global SyntaxUnit, Parser, Colors*/
-/**
- * Represents a single part of a CSS property value, meaning that it represents
- * just one part of the data between ":" and ";".
- * @param {String} text The text representation of the unit.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- * @namespace parserlib.css
- * @class PropertyValuePart
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- */
-function PropertyValuePart(text, line, col){
-
-    SyntaxUnit.call(this, text, line, col, Parser.PROPERTY_VALUE_PART_TYPE);
-
-    /**
-     * Indicates the type of value unit.
-     * @type String
-     * @property type
-     */
-    this.type = "unknown";
-
-    //figure out what type of data it is
-
-    var temp;
-
-    //it is a measurement?
-    if (/^([+\-]?[\d\.]+)([a-z]+)$/i.test(text)){  //dimension
-        this.type = "dimension";
-        this.value = +RegExp.$1;
-        this.units = RegExp.$2;
-
-        //try to narrow down
-        switch(this.units.toLowerCase()){
-
-            case "em":
-            case "rem":
-            case "ex":
-            case "px":
-            case "cm":
-            case "mm":
-            case "in":
-            case "pt":
-            case "pc":
-            case "ch":
-            case "vh":
-            case "vw":
-            case "vm":
-                this.type = "length";
-                break;
-
-            case "deg":
-            case "rad":
-            case "grad":
-                this.type = "angle";
-                break;
-
-            case "ms":
-            case "s":
-                this.type = "time";
-                break;
-
-            case "hz":
-            case "khz":
-                this.type = "frequency";
-                break;
-
-            case "dpi":
-            case "dpcm":
-                this.type = "resolution";
-                break;
-
-            //default
-
-        }
-
-    } else if (/^([+\-]?[\d\.]+)%$/i.test(text)){  //percentage
-        this.type = "percentage";
-        this.value = +RegExp.$1;
-    } else if (/^([+\-]?[\d\.]+)%$/i.test(text)){  //percentage
-        this.type = "percentage";
-        this.value = +RegExp.$1;
-    } else if (/^([+\-]?\d+)$/i.test(text)){  //integer
-        this.type = "integer";
-        this.value = +RegExp.$1;
-    } else if (/^([+\-]?[\d\.]+)$/i.test(text)){  //number
-        this.type = "number";
-        this.value = +RegExp.$1;
-
-    } else if (/^#([a-f0-9]{3,6})/i.test(text)){  //hexcolor
-        this.type = "color";
-        temp = RegExp.$1;
-        if (temp.length == 3){
-            this.red    = parseInt(temp.charAt(0)+temp.charAt(0),16);
-            this.green  = parseInt(temp.charAt(1)+temp.charAt(1),16);
-            this.blue   = parseInt(temp.charAt(2)+temp.charAt(2),16);
-        } else {
-            this.red    = parseInt(temp.substring(0,2),16);
-            this.green  = parseInt(temp.substring(2,4),16);
-            this.blue   = parseInt(temp.substring(4,6),16);
-        }
-    } else if (/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i.test(text)){ //rgb() color with absolute numbers
-        this.type   = "color";
-        this.red    = +RegExp.$1;
-        this.green  = +RegExp.$2;
-        this.blue   = +RegExp.$3;
-    } else if (/^rgb\(\s*(\d+)%\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)/i.test(text)){ //rgb() color with percentages
-        this.type   = "color";
-        this.red    = +RegExp.$1 * 255 / 100;
-        this.green  = +RegExp.$2 * 255 / 100;
-        this.blue   = +RegExp.$3 * 255 / 100;
-    } else if (/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d\.]+)\s*\)/i.test(text)){ //rgba() color with absolute numbers
-        this.type   = "color";
-        this.red    = +RegExp.$1;
-        this.green  = +RegExp.$2;
-        this.blue   = +RegExp.$3;
-        this.alpha  = +RegExp.$4;
-    } else if (/^rgba\(\s*(\d+)%\s*,\s*(\d+)%\s*,\s*(\d+)%\s*,\s*([\d\.]+)\s*\)/i.test(text)){ //rgba() color with percentages
-        this.type   = "color";
-        this.red    = +RegExp.$1 * 255 / 100;
-        this.green  = +RegExp.$2 * 255 / 100;
-        this.blue   = +RegExp.$3 * 255 / 100;
-        this.alpha  = +RegExp.$4;
-    } else if (/^hsl\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)/i.test(text)){ //hsl()
-        this.type   = "color";
-        this.hue    = +RegExp.$1;
-        this.saturation = +RegExp.$2 / 100;
-        this.lightness  = +RegExp.$3 / 100;
-    } else if (/^hsla\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*,\s*([\d\.]+)\s*\)/i.test(text)){ //hsla() color with percentages
-        this.type   = "color";
-        this.hue    = +RegExp.$1;
-        this.saturation = +RegExp.$2 / 100;
-        this.lightness  = +RegExp.$3 / 100;
-        this.alpha  = +RegExp.$4;
-    } else if (/^url\(["']?([^\)"']+)["']?\)/i.test(text)){ //URI
-        this.type   = "uri";
-        this.uri    = RegExp.$1;
-    } else if (/^([^\(]+)\(/i.test(text)){
-        this.type   = "function";
-        this.name   = RegExp.$1;
-        this.value  = text;
-    } else if (/^["'][^"']*["']/.test(text)){    //string
-        this.type   = "string";
-        this.value  = eval(text);
-    } else if (Colors[text.toLowerCase()]){  //named color
-        this.type   = "color";
-        temp        = Colors[text.toLowerCase()].substring(1);
-        this.red    = parseInt(temp.substring(0,2),16);
-        this.green  = parseInt(temp.substring(2,4),16);
-        this.blue   = parseInt(temp.substring(4,6),16);
-    } else if (/^[\,\/]$/.test(text)){
-        this.type   = "operator";
-        this.value  = text;
-    } else if (/^[a-z\-\u0080-\uFFFF][a-z0-9\-\u0080-\uFFFF]*$/i.test(text)){
-        this.type   = "identifier";
-        this.value  = text;
-    }
-
-}
-
-PropertyValuePart.prototype = new SyntaxUnit();
-PropertyValuePart.prototype.constructor = PropertyValuePart;
-
-/**
- * Create a new syntax unit based solely on the given token.
- * Convenience method for creating a new syntax unit when
- * it represents a single token instead of multiple.
- * @param {Object} token The token object to represent.
- * @return {parserlib.css.PropertyValuePart} The object representing the token.
- * @static
- * @method fromToken
- */
-PropertyValuePart.fromToken = function(token){
-    return new PropertyValuePart(token.value, token.startLine, token.startCol);
-};
-var Pseudos = {
-    ":first-letter": 1,
-    ":first-line":   1,
-    ":before":       1,
-    ":after":        1
-};
-
-Pseudos.ELEMENT = 1;
-Pseudos.CLASS = 2;
-
-Pseudos.isElement = function(pseudo){
-    return pseudo.indexOf("::") === 0 || Pseudos[pseudo.toLowerCase()] == Pseudos.ELEMENT;
-};
-/*global SyntaxUnit, Parser, Specificity*/
-/**
- * Represents an entire single selector, including all parts but not
- * including multiple selectors (those separated by commas).
- * @namespace parserlib.css
- * @class Selector
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {Array} parts Array of selectors parts making up this selector.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function Selector(parts, line, col){
-
-    SyntaxUnit.call(this, parts.join(" "), line, col, Parser.SELECTOR_TYPE);
-
-    /**
-     * The parts that make up the selector.
-     * @type Array
-     * @property parts
-     */
-    this.parts = parts;
-
-    /**
-     * The specificity of the selector.
-     * @type parserlib.css.Specificity
-     * @property specificity
-     */
-    this.specificity = Specificity.calculate(this);
-
-}
-
-Selector.prototype = new SyntaxUnit();
-Selector.prototype.constructor = Selector;
-
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a single part of a selector string, meaning a single set of
- * element name and modifiers. This does not include combinators such as
- * spaces, +, >, etc.
- * @namespace parserlib.css
- * @class SelectorPart
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {String} elementName The element name in the selector or null
- *      if there is no element name.
- * @param {Array} modifiers Array of individual modifiers for the element.
- *      May be empty if there are none.
- * @param {String} text The text representation of the unit.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function SelectorPart(elementName, modifiers, text, line, col){
-
-    SyntaxUnit.call(this, text, line, col, Parser.SELECTOR_PART_TYPE);
-
-    /**
-     * The tag name of the element to which this part
-     * of the selector affects.
-     * @type String
-     * @property elementName
-     */
-    this.elementName = elementName;
-
-    /**
-     * The parts that come after the element name, such as class names, IDs,
-     * pseudo classes/elements, etc.
-     * @type Array
-     * @property modifiers
-     */
-    this.modifiers = modifiers;
-
-}
-
-SelectorPart.prototype = new SyntaxUnit();
-SelectorPart.prototype.constructor = SelectorPart;
-
-
-/*global SyntaxUnit, Parser*/
-/**
- * Represents a selector modifier string, meaning a class name, element name,
- * element ID, pseudo rule, etc.
- * @namespace parserlib.css
- * @class SelectorSubPart
- * @extends parserlib.util.SyntaxUnit
- * @constructor
- * @param {String} text The text representation of the unit.
- * @param {String} type The type of selector modifier.
- * @param {int} line The line of text on which the unit resides.
- * @param {int} col The column of text on which the unit resides.
- */
-function SelectorSubPart(text, type, line, col){
-
-    SyntaxUnit.call(this, text, line, col, Parser.SELECTOR_SUB_PART_TYPE);
-
-    /**
-     * The type of modifier.
-     * @type String
-     * @property type
-     */
-    this.type = type;
-
-    /**
-     * Some subparts have arguments, this represents them.
-     * @type Array
-     * @property args
-     */
-    this.args = [];
-
-}
-
-SelectorSubPart.prototype = new SyntaxUnit();
-SelectorSubPart.prototype.constructor = SelectorSubPart;
-
-
-/*global Pseudos, SelectorPart*/
-/**
- * Represents a selector's specificity.
- * @namespace parserlib.css
- * @class Specificity
- * @constructor
- * @param {int} a Should be 1 for inline styles, zero for stylesheet styles
- * @param {int} b Number of ID selectors
- * @param {int} c Number of classes and pseudo classes
- * @param {int} d Number of element names and pseudo elements
- */
-function Specificity(a, b, c, d){
-    this.a = a;
-    this.b = b;
-    this.c = c;
-    this.d = d;
-}
-
-Specificity.prototype = {
-    constructor: Specificity,
-
-    /**
-     * Compare this specificity to another.
-     * @param {Specificity} other The other specificity to compare to.
-     * @return {int} -1 if the other specificity is larger, 1 if smaller, 0 if equal.
-     * @method compare
-     */
-    compare: function(other){
-        var comps = ["a", "b", "c", "d"],
-            i, len;
-
-        for (i=0, len=comps.length; i < len; i++){
-            if (this[comps[i]] < other[comps[i]]){
-                return -1;
-            } else if (this[comps[i]] > other[comps[i]]){
-                return 1;
-            }
-        }
-
-        return 0;
-    },
-
-    /**
-     * Creates a numeric value for the specificity.
-     * @return {int} The numeric value for the specificity.
-     * @method valueOf
-     */
-    valueOf: function(){
-        return (this.a * 1000) + (this.b * 100) + (this.c * 10) + this.d;
-    },
-
-    /**
-     * Returns a string representation for specificity.
-     * @return {String} The string representation of specificity.
-     * @method toString
-     */
-    toString: function(){
-        return this.a + "," + this.b + "," + this.c + "," + this.d;
-    }
-
-};
-
-/**
- * Calculates the specificity of the given selector.
- * @param {parserlib.css.Selector} The selector to calculate specificity for.
- * @return {parserlib.css.Specificity} The specificity of the selector.
- * @static
- * @method calculate
- */
-Specificity.calculate = function(selector){
-
-    var i, len,
-        part,
-        b=0, c=0, d=0;
-
-    function updateValues(part){
-
-        var i, j, len, num,
-            elementName = part.elementName ? part.elementName.text : "",
-            modifier;
-
-        if (elementName && elementName.charAt(elementName.length-1) != "*") {
-            d++;
-        }
-
-        for (i=0, len=part.modifiers.length; i < len; i++){
-            modifier = part.modifiers[i];
-            switch(modifier.type){
-                case "class":
-                case "attribute":
-                    c++;
-                    break;
-
-                case "id":
-                    b++;
-                    break;
-
-                case "pseudo":
-                    if (Pseudos.isElement(modifier.text)){
-                        d++;
-                    } else {
-                        c++;
-                    }
-                    break;
-
-                case "not":
-                    for (j=0, num=modifier.args.length; j < num; j++){
-                        updateValues(modifier.args[j]);
-                    }
-            }
-         }
-    }
-
-    for (i=0, len=selector.parts.length; i < len; i++){
-        part = selector.parts[i];
-
-        if (part instanceof SelectorPart){
-            updateValues(part);
-        }
-    }
-
-    return new Specificity(0, b, c, d);
-};
-
-/*global Tokens, TokenStreamBase*/
-
-var h = /^[0-9a-fA-F]$/,
-    nonascii = /^[\u0080-\uFFFF]$/,
-    nl = /\n|\r\n|\r|\f/;
-
-//-----------------------------------------------------------------------------
-// Helper functions
-//-----------------------------------------------------------------------------
-
-
-function isHexDigit(c){
-    return c !== null && h.test(c);
-}
-
-function isDigit(c){
-    return c !== null && /\d/.test(c);
-}
-
-function isWhitespace(c){
-    return c !== null && /\s/.test(c);
-}
-
-function isNewLine(c){
-    return c !== null && nl.test(c);
-}
-
-function isNameStart(c){
-    return c !== null && (/[a-z_\u0080-\uFFFF\\]/i.test(c));
-}
-
-function isNameChar(c){
-    return c !== null && (isNameStart(c) || /[0-9\-\\]/.test(c));
-}
-
-function isIdentStart(c){
-    return c !== null && (isNameStart(c) || /\-\\/.test(c));
-}
-
-function mix(receiver, supplier){
-    for (var prop in supplier){
-        if (supplier.hasOwnProperty(prop)){
-            receiver[prop] = supplier[prop];
-        }
-    }
-    return receiver;
-}
-
-//-----------------------------------------------------------------------------
-// CSS Token Stream
-//-----------------------------------------------------------------------------
-
-
-/**
- * A token stream that produces CSS tokens.
- * @param {String|Reader} input The source of text to tokenize.
- * @constructor
- * @class TokenStream
- * @namespace parserlib.css
- */
-function TokenStream(input){
-    TokenStreamBase.call(this, input, Tokens);
-}
-
-TokenStream.prototype = mix(new TokenStreamBase(), {
-
-    /**
-     * Overrides the TokenStreamBase method of the same name
-     * to produce CSS tokens.
-     * @param {variant} channel The name of the channel to use
-     *      for the next token.
-     * @return {Object} A token object representing the next token.
-     * @method _getToken
-     * @private
-     */
-    _getToken: function(channel){
-
-        var c,
-            reader = this._reader,
-            token   = null,
-            startLine   = reader.getLine(),
-            startCol    = reader.getCol();
-
-        c = reader.read();
-
-
-        while(c){
-            switch(c){
-
-                /*
-                 * Potential tokens:
-                 * - COMMENT
-                 * - SLASH
-                 * - CHAR
-                 */
-                case "/":
-
-                    if(reader.peek() == "*"){
-                        token = this.commentToken(c, startLine, startCol);
-                    } else {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - DASHMATCH
-                 * - INCLUDES
-                 * - PREFIXMATCH
-                 * - SUFFIXMATCH
-                 * - SUBSTRINGMATCH
-                 * - CHAR
-                 */
-                case "|":
-                case "~":
-                case "^":
-                case "$":
-                case "*":
-                    if(reader.peek() == "="){
-                        token = this.comparisonToken(c, startLine, startCol);
-                    } else {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - STRING
-                 * - INVALID
-                 */
-                case "\"":
-                case "'":
-                    token = this.stringToken(c, startLine, startCol);
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - HASH
-                 * - CHAR
-                 */
-                case "#":
-                    if (isNameChar(reader.peek())){
-                        token = this.hashToken(c, startLine, startCol);
-                    } else {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - DOT
-                 * - NUMBER
-                 * - DIMENSION
-                 * - PERCENTAGE
-                 */
-                case ".":
-                    if (isDigit(reader.peek())){
-                        token = this.numberToken(c, startLine, startCol);
-                    } else {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - CDC
-                 * - MINUS
-                 * - NUMBER
-                 * - DIMENSION
-                 * - PERCENTAGE
-                 */
-                case "-":
-                    if (reader.peek() == "-"){  //could be closing HTML-style comment
-                        token = this.htmlCommentEndToken(c, startLine, startCol);
-                    } else if (isNameStart(reader.peek())){
-                        token = this.identOrFunctionToken(c, startLine, startCol);
-                    } else {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - IMPORTANT_SYM
-                 * - CHAR
-                 */
-                case "!":
-                    token = this.importantToken(c, startLine, startCol);
-                    break;
-
-                /*
-                 * Any at-keyword or CHAR
-                 */
-                case "@":
-                    token = this.atRuleToken(c, startLine, startCol);
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - NOT
-                 * - CHAR
-                 */
-                case ":":
-                    token = this.notToken(c, startLine, startCol);
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - CDO
-                 * - CHAR
-                 */
-                case "<":
-                    token = this.htmlCommentStartToken(c, startLine, startCol);
-                    break;
-
-                /*
-                 * Potential tokens:
-                 * - UNICODE_RANGE
-                 * - URL
-                 * - CHAR
-                 */
-                case "U":
-                case "u":
-                    if (reader.peek() == "+"){
-                        token = this.unicodeRangeToken(c, startLine, startCol);
-                        break;
-                    }
-                    /* falls through */
-                default:
-
-                    /*
-                     * Potential tokens:
-                     * - NUMBER
-                     * - DIMENSION
-                     * - LENGTH
-                     * - FREQ
-                     * - TIME
-                     * - EMS
-                     * - EXS
-                     * - ANGLE
-                     */
-                    if (isDigit(c)){
-                        token = this.numberToken(c, startLine, startCol);
-                    } else
-
-                    /*
-                     * Potential tokens:
-                     * - S
-                     */
-                    if (isWhitespace(c)){
-                        token = this.whitespaceToken(c, startLine, startCol);
-                    } else
-
-                    /*
-                     * Potential tokens:
-                     * - IDENT
-                     */
-                    if (isIdentStart(c)){
-                        token = this.identOrFunctionToken(c, startLine, startCol);
-                    } else
-
-                    /*
-                     * Potential tokens:
-                     * - CHAR
-                     * - PLUS
-                     */
-                    {
-                        token = this.charToken(c, startLine, startCol);
-                    }
-
-
-
-
-
-
-            }
-
-            //make sure this token is wanted
-            //TODO: check channel
-            break;
-        }
-
-        if (!token && c === null){
-            token = this.createToken(Tokens.EOF,null,startLine,startCol);
-        }
-
-        return token;
-    },
-
-    //-------------------------------------------------------------------------
-    // Methods to create tokens
-    //-------------------------------------------------------------------------
-
-    /**
-     * Produces a token based on available data and the current
-     * reader position information. This method is called by other
-     * private methods to create tokens and is never called directly.
-     * @param {int} tt The token type.
-     * @param {String} value The text value of the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @param {Object} options (Optional) Specifies a channel property
-     *      to indicate that a different channel should be scanned
-     *      and/or a hide property indicating that the token should
-     *      be hidden.
-     * @return {Object} A token object.
-     * @method createToken
-     */
-    createToken: function(tt, value, startLine, startCol, options){
-        var reader = this._reader;
-        options = options || {};
-
-        return {
-            value:      value,
-            type:       tt,
-            channel:    options.channel,
-            hide:       options.hide || false,
-            startLine:  startLine,
-            startCol:   startCol,
-            endLine:    reader.getLine(),
-            endCol:     reader.getCol()
-        };
-    },
-
-    //-------------------------------------------------------------------------
-    // Methods to create specific tokens
-    //-------------------------------------------------------------------------
-
-    /**
-     * Produces a token for any at-rule. If the at-rule is unknown, then
-     * the token is for a single "@" character.
-     * @param {String} first The first character for the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method atRuleToken
-     */
-    atRuleToken: function(first, startLine, startCol){
-        var rule    = first,
-            reader  = this._reader,
-            tt      = Tokens.CHAR,
-            valid   = false,
-            ident,
-            c;
-
-        /*
-         * First, mark where we are. There are only four @ rules,
-         * so anything else is really just an invalid token.
-         * Basically, if this doesn't match one of the known @
-         * rules, just return '@' as an unknown token and allow
-         * parsing to continue after that point.
-         */
-        reader.mark();
-
-        //try to find the at-keyword
-        ident = this.readName();
-        rule = first + ident;
-        tt = Tokens.type(rule.toLowerCase());
-
-        //if it's not valid, use the first character only and reset the reader
-        if (tt == Tokens.CHAR || tt == Tokens.UNKNOWN){
-            if (rule.length > 1){
-                tt = Tokens.UNKNOWN_SYM;
-            } else {
-                tt = Tokens.CHAR;
-                rule = first;
-                reader.reset();
-            }
-        }
-
-        return this.createToken(tt, rule, startLine, startCol);
-    },
-
-    /**
-     * Produces a character token based on the given character
-     * and location in the stream. If there's a special (non-standard)
-     * token name, this is used; otherwise CHAR is used.
-     * @param {String} c The character for the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method charToken
-     */
-    charToken: function(c, startLine, startCol){
-        var tt = Tokens.type(c);
-
-        if (tt == -1){
-            tt = Tokens.CHAR;
-        }
-
-        return this.createToken(tt, c, startLine, startCol);
-    },
-
-    /**
-     * Produces a character token based on the given character
-     * and location in the stream. If there's a special (non-standard)
-     * token name, this is used; otherwise CHAR is used.
-     * @param {String} first The first character for the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method commentToken
-     */
-    commentToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            comment = this.readComment(first);
-
-        return this.createToken(Tokens.COMMENT, comment, startLine, startCol);
-    },
-
-    /**
-     * Produces a comparison token based on the given character
-     * and location in the stream. The next character must be
-     * read and is already known to be an equals sign.
-     * @param {String} c The character for the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method comparisonToken
-     */
-    comparisonToken: function(c, startLine, startCol){
-        var reader  = this._reader,
-            comparison  = c + reader.read(),
-            tt      = Tokens.type(comparison) || Tokens.CHAR;
-
-        return this.createToken(tt, comparison, startLine, startCol);
-    },
-
-    /**
-     * Produces a hash token based on the specified information. The
-     * first character provided is the pound sign (#) and then this
-     * method reads a name afterward.
-     * @param {String} first The first character (#) in the hash name.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method hashToken
-     */
-    hashToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            name    = this.readName(first);
-
-        return this.createToken(Tokens.HASH, name, startLine, startCol);
-    },
-
-    /**
-     * Produces a CDO or CHAR token based on the specified information. The
-     * first character is provided and the rest is read by the function to determine
-     * the correct token to create.
-     * @param {String} first The first character in the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method htmlCommentStartToken
-     */
-    htmlCommentStartToken: function(first, startLine, startCol){
-        var reader      = this._reader,
-            text        = first;
-
-        reader.mark();
-        text += reader.readCount(3);
-
-        if (text == "<!--"){
-            return this.createToken(Tokens.CDO, text, startLine, startCol);
-        } else {
-            reader.reset();
-            return this.charToken(first, startLine, startCol);
-        }
-    },
-
-    /**
-     * Produces a CDC or CHAR token based on the specified information. The
-     * first character is provided and the rest is read by the function to determine
-     * the correct token to create.
-     * @param {String} first The first character in the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method htmlCommentEndToken
-     */
-    htmlCommentEndToken: function(first, startLine, startCol){
-        var reader      = this._reader,
-            text        = first;
-
-        reader.mark();
-        text += reader.readCount(2);
-
-        if (text == "-->"){
-            return this.createToken(Tokens.CDC, text, startLine, startCol);
-        } else {
-            reader.reset();
-            return this.charToken(first, startLine, startCol);
-        }
-    },
-
-    /**
-     * Produces an IDENT or FUNCTION token based on the specified information. The
-     * first character is provided and the rest is read by the function to determine
-     * the correct token to create.
-     * @param {String} first The first character in the identifier.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method identOrFunctionToken
-     */
-    identOrFunctionToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            ident   = this.readName(first),
-            tt      = Tokens.IDENT;
-
-        //if there's a left paren immediately after, it's a URI or function
-        if (reader.peek() == "("){
-            ident += reader.read();
-            if (ident.toLowerCase() == "url("){
-                tt = Tokens.URI;
-                ident = this.readURI(ident);
-
-                //didn't find a valid URL or there's no closing paren
-                if (ident.toLowerCase() == "url("){
-                    tt = Tokens.FUNCTION;
-                }
-            } else {
-                tt = Tokens.FUNCTION;
-            }
-        } else if (reader.peek() == ":"){  //might be an IE function
-
-            //IE-specific functions always being with progid:
-            if (ident.toLowerCase() == "progid"){
-                ident += reader.readTo("(");
-                tt = Tokens.IE_FUNCTION;
-            }
-        }
-
-        return this.createToken(tt, ident, startLine, startCol);
-    },
-
-    /**
-     * Produces an IMPORTANT_SYM or CHAR token based on the specified information. The
-     * first character is provided and the rest is read by the function to determine
-     * the correct token to create.
-     * @param {String} first The first character in the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method importantToken
-     */
-    importantToken: function(first, startLine, startCol){
-        var reader      = this._reader,
-            important   = first,
-            tt          = Tokens.CHAR,
-            temp,
-            c;
-
-        reader.mark();
-        c = reader.read();
-
-        while(c){
-
-            //there can be a comment in here
-            if (c == "/"){
-
-                //if the next character isn't a star, then this isn't a valid !important token
-                if (reader.peek() != "*"){
-                    break;
-                } else {
-                    temp = this.readComment(c);
-                    if (temp === ""){    //broken!
-                        break;
-                    }
-                }
-            } else if (isWhitespace(c)){
-                important += c + this.readWhitespace();
-            } else if (/i/i.test(c)){
-                temp = reader.readCount(8);
-                if (/mportant/i.test(temp)){
-                    important += c + temp;
-                    tt = Tokens.IMPORTANT_SYM;
-
-                }
-                break;  //we're done
-            } else {
-                break;
-            }
-
-            c = reader.read();
-        }
-
-        if (tt == Tokens.CHAR){
-            reader.reset();
-            return this.charToken(first, startLine, startCol);
-        } else {
-            return this.createToken(tt, important, startLine, startCol);
-        }
-
-
-    },
-
-    /**
-     * Produces a NOT or CHAR token based on the specified information. The
-     * first character is provided and the rest is read by the function to determine
-     * the correct token to create.
-     * @param {String} first The first character in the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method notToken
-     */
-    notToken: function(first, startLine, startCol){
-        var reader      = this._reader,
-            text        = first;
-
-        reader.mark();
-        text += reader.readCount(4);
-
-        if (text.toLowerCase() == ":not("){
-            return this.createToken(Tokens.NOT, text, startLine, startCol);
-        } else {
-            reader.reset();
-            return this.charToken(first, startLine, startCol);
-        }
-    },
-
-    /**
-     * Produces a number token based on the given character
-     * and location in the stream. This may return a token of
-     * NUMBER, EMS, EXS, LENGTH, ANGLE, TIME, FREQ, DIMENSION,
-     * or PERCENTAGE.
-     * @param {String} first The first character for the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method numberToken
-     */
-    numberToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            value   = this.readNumber(first),
-            ident,
-            tt      = Tokens.NUMBER,
-            c       = reader.peek();
-
-        if (isIdentStart(c)){
-            ident = this.readName(reader.read());
-            value += ident;
-
-            if (/^em$|^ex$|^px$|^gd$|^rem$|^vw$|^vh$|^vm$|^ch$|^cm$|^mm$|^in$|^pt$|^pc$/i.test(ident)){
-                tt = Tokens.LENGTH;
-            } else if (/^deg|^rad$|^grad$/i.test(ident)){
-                tt = Tokens.ANGLE;
-            } else if (/^ms$|^s$/i.test(ident)){
-                tt = Tokens.TIME;
-            } else if (/^hz$|^khz$/i.test(ident)){
-                tt = Tokens.FREQ;
-            } else if (/^dpi$|^dpcm$/i.test(ident)){
-                tt = Tokens.RESOLUTION;
-            } else {
-                tt = Tokens.DIMENSION;
-            }
-
-        } else if (c == "%"){
-            value += reader.read();
-            tt = Tokens.PERCENTAGE;
-        }
-
-        return this.createToken(tt, value, startLine, startCol);
-    },
-
-    /**
-     * Produces a string token based on the given character
-     * and location in the stream. Since strings may be indicated
-     * by single or double quotes, a failure to match starting
-     * and ending quotes results in an INVALID token being generated.
-     * The first character in the string is passed in and then
-     * the rest are read up to and including the final quotation mark.
-     * @param {String} first The first character in the string.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method stringToken
-     */
-    stringToken: function(first, startLine, startCol){
-        var delim   = first,
-            string  = first,
-            reader  = this._reader,
-            prev    = first,
-            tt      = Tokens.STRING,
-            c       = reader.read();
-
-        while(c){
-            string += c;
-
-            //if the delimiter is found with an escapement, we're done.
-            if (c == delim && prev != "\\"){
-                break;
-            }
-
-            //if there's a newline without an escapement, it's an invalid string
-            if (isNewLine(reader.peek()) && c != "\\"){
-                tt = Tokens.INVALID;
-                break;
-            }
-
-            //save previous and get next
-            prev = c;
-            c = reader.read();
-        }
-
-        //if c is null, that means we're out of input and the string was never closed
-        if (c === null){
-            tt = Tokens.INVALID;
-        }
-
-        return this.createToken(tt, string, startLine, startCol);
-    },
-
-    unicodeRangeToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            value   = first,
-            temp,
-            tt      = Tokens.CHAR;
-
-        //then it should be a unicode range
-        if (reader.peek() == "+"){
-            reader.mark();
-            value += reader.read();
-            value += this.readUnicodeRangePart(true);
-
-            //ensure there's an actual unicode range here
-            if (value.length == 2){
-                reader.reset();
-            } else {
-
-                tt = Tokens.UNICODE_RANGE;
-
-                //if there's a ? in the first part, there can't be a second part
-                if (value.indexOf("?") == -1){
-
-                    if (reader.peek() == "-"){
-                        reader.mark();
-                        temp = reader.read();
-                        temp += this.readUnicodeRangePart(false);
-
-                        //if there's not another value, back up and just take the first
-                        if (temp.length == 1){
-                            reader.reset();
-                        } else {
-                            value += temp;
-                        }
-                    }
-
-                }
-            }
-        }
-
-        return this.createToken(tt, value, startLine, startCol);
-    },
-
-    /**
-     * Produces a S token based on the specified information. Since whitespace
-     * may have multiple characters, this consumes all whitespace characters
-     * into a single token.
-     * @param {String} first The first character in the token.
-     * @param {int} startLine The beginning line for the character.
-     * @param {int} startCol The beginning column for the character.
-     * @return {Object} A token object.
-     * @method whitespaceToken
-     */
-    whitespaceToken: function(first, startLine, startCol){
-        var reader  = this._reader,
-            value   = first + this.readWhitespace();
-        return this.createToken(Tokens.S, value, startLine, startCol);
-    },
-
-
-
-
-    //-------------------------------------------------------------------------
-    // Methods to read values from the string stream
-    //-------------------------------------------------------------------------
-
-    readUnicodeRangePart: function(allowQuestionMark){
-        var reader  = this._reader,
-            part = "",
-            c       = reader.peek();
-
-        //first read hex digits
-        while(isHexDigit(c) && part.length < 6){
-            reader.read();
-            part += c;
-            c = reader.peek();
-        }
-
-        //then read question marks if allowed
-        if (allowQuestionMark){
-            while(c == "?" && part.length < 6){
-                reader.read();
-                part += c;
-                c = reader.peek();
-            }
-        }
-
-        //there can't be any other characters after this point
-
-        return part;
-    },
-
-    readWhitespace: function(){
-        var reader  = this._reader,
-            whitespace = "",
-            c       = reader.peek();
-
-        while(isWhitespace(c)){
-            reader.read();
-            whitespace += c;
-            c = reader.peek();
-        }
-
-        return whitespace;
-    },
-    readNumber: function(first){
-        var reader  = this._reader,
-            number  = first,
-            hasDot  = (first == "."),
-            c       = reader.peek();
-
-
-        while(c){
-            if (isDigit(c)){
-                number += reader.read();
-            } else if (c == "."){
-                if (hasDot){
-                    break;
-                } else {
-                    hasDot = true;
-                    number += reader.read();
-                }
-            } else {
-                break;
-            }
-
-            c = reader.peek();
-        }
-
-        return number;
-    },
-    readString: function(){
-        var reader  = this._reader,
-            delim   = reader.read(),
-            string  = delim,
-            prev    = delim,
-            c       = reader.peek();
-
-        while(c){
-            c = reader.read();
-            string += c;
-
-            //if the delimiter is found with an escapement, we're done.
-            if (c == delim && prev != "\\"){
-                break;
-            }
-
-            //if there's a newline without an escapement, it's an invalid string
-            if (isNewLine(reader.peek()) && c != "\\"){
-                string = "";
-                break;
-            }
-
-            //save previous and get next
-            prev = c;
-            c = reader.peek();
-        }
-
-        //if c is null, that means we're out of input and the string was never closed
-        if (c === null){
-            string = "";
-        }
-
-        return string;
-    },
-    readURI: function(first){
-        var reader  = this._reader,
-            uri     = first,
-            inner   = "",
-            c       = reader.peek();
-
-        reader.mark();
-
-        //skip whitespace before
-        while(c && isWhitespace(c)){
-            reader.read();
-            c = reader.peek();
-        }
-
-        //it's a string
-        if (c == "'" || c == "\""){
-            inner = this.readString();
-        } else {
-            inner = this.readURL();
-        }
-
-        c = reader.peek();
-
-        //skip whitespace after
-        while(c && isWhitespace(c)){
-            reader.read();
-            c = reader.peek();
-        }
-
-        //if there was no inner value or the next character isn't closing paren, it's not a URI
-        if (inner === "" || c != ")"){
-            uri = first;
-            reader.reset();
-        } else {
-            uri += inner + reader.read();
-        }
-
-        return uri;
-    },
-    readURL: function(){
-        var reader  = this._reader,
-            url     = "",
-            c       = reader.peek();
-
-        //TODO: Check for escape and nonascii
-        while (/^[!#$%&\\*-~]$/.test(c)){
-            url += reader.read();
-            c = reader.peek();
-        }
-
-        return url;
-
-    },
-    readName: function(first){
-        var reader  = this._reader,
-            ident   = first || "",
-            c       = reader.peek();
-
-        while(true){
-            if (c == "\\"){
-                ident += this.readEscape(reader.read());
-                c = reader.peek();
-            } else if(c && isNameChar(c)){
-                ident += reader.read();
-                c = reader.peek();
-            } else {
-                break;
-            }
-        }
-
-        return ident;
-    },
-
-    readEscape: function(first){
-        var reader  = this._reader,
-            cssEscape = first || "",
-            i       = 0,
-            c       = reader.peek();
-
-        if (isHexDigit(c)){
-            do {
-                cssEscape += reader.read();
-                c = reader.peek();
-            } while(c && isHexDigit(c) && ++i < 6);
-        }
-
-        if (cssEscape.length == 3 && /\s/.test(c) ||
-            cssEscape.length == 7 || cssEscape.length == 1){
-                reader.read();
-        } else {
-            c = "";
-        }
-
-        return cssEscape + c;
-    },
-
-    readComment: function(first){
-        var reader  = this._reader,
-            comment = first || "",
-            c       = reader.read();
-
-        if (c == "*"){
-            while(c){
-                comment += c;
-
-                //look for end of comment
-                if (comment.length > 2 && c == "*" && reader.peek() == "/"){
-                    comment += reader.read();
-                    break;
-                }
-
-                c = reader.read();
-            }
-
-            return comment;
-        } else {
-            return "";
-        }
-
-    }
-});
-
-
-var Tokens  = [
-
-    /*
-     * The following token names are defined in CSS3 Grammar: http://www.w3.org/TR/css3-syntax/#lexical
-     */
-
-    //HTML-style comments
-    { name: "CDO"},
-    { name: "CDC"},
-
-    //ignorables
-    { name: "S", whitespace: true/*, channel: "ws"*/},
-    { name: "COMMENT", comment: true, hide: true, channel: "comment" },
-
-    //attribute equality
-    { name: "INCLUDES", text: "~="},
-    { name: "DASHMATCH", text: "|="},
-    { name: "PREFIXMATCH", text: "^="},
-    { name: "SUFFIXMATCH", text: "$="},
-    { name: "SUBSTRINGMATCH", text: "*="},
-
-    //identifier types
-    { name: "STRING"},
-    { name: "IDENT"},
-    { name: "HASH"},
-
-    //at-keywords
-    { name: "IMPORT_SYM", text: "@import"},
-    { name: "PAGE_SYM", text: "@page"},
-    { name: "MEDIA_SYM", text: "@media"},
-    { name: "FONT_FACE_SYM", text: "@font-face"},
-    { name: "CHARSET_SYM", text: "@charset"},
-    { name: "NAMESPACE_SYM", text: "@namespace"},
-    { name: "VIEWPORT_SYM", text: "@viewport"},
-    { name: "UNKNOWN_SYM" },
-    //{ name: "ATKEYWORD"},
-
-    //CSS3 animations
-    { name: "KEYFRAMES_SYM", text: [ "@keyframes", "@-webkit-keyframes", "@-moz-keyframes", "@-o-keyframes" ] },
-
-    //important symbol
-    { name: "IMPORTANT_SYM"},
-
-    //measurements
-    { name: "LENGTH"},
-    { name: "ANGLE"},
-    { name: "TIME"},
-    { name: "FREQ"},
-    { name: "DIMENSION"},
-    { name: "PERCENTAGE"},
-    { name: "NUMBER"},
-
-    //functions
-    { name: "URI"},
-    { name: "FUNCTION"},
-
-    //Unicode ranges
-    { name: "UNICODE_RANGE"},
-
-    /*
-     * The following token names are defined in CSS3 Selectors: http://www.w3.org/TR/css3-selectors/#selector-syntax
-     */
-
-    //invalid string
-    { name: "INVALID"},
-
-    //combinators
-    { name: "PLUS", text: "+" },
-    { name: "GREATER", text: ">"},
-    { name: "COMMA", text: ","},
-    { name: "TILDE", text: "~"},
-
-    //modifier
-    { name: "NOT"},
-
-    /*
-     * Defined in CSS3 Paged Media
-     */
-    { name: "TOPLEFTCORNER_SYM", text: "@top-left-corner"},
-    { name: "TOPLEFT_SYM", text: "@top-left"},
-    { name: "TOPCENTER_SYM", text: "@top-center"},
-    { name: "TOPRIGHT_SYM", text: "@top-right"},
-    { name: "TOPRIGHTCORNER_SYM", text: "@top-right-corner"},
-    { name: "BOTTOMLEFTCORNER_SYM", text: "@bottom-left-corner"},
-    { name: "BOTTOMLEFT_SYM", text: "@bottom-left"},
-    { name: "BOTTOMCENTER_SYM", text: "@bottom-center"},
-    { name: "BOTTOMRIGHT_SYM", text: "@bottom-right"},
-    { name: "BOTTOMRIGHTCORNER_SYM", text: "@bottom-right-corner"},
-    { name: "LEFTTOP_SYM", text: "@left-top"},
-    { name: "LEFTMIDDLE_SYM", text: "@left-middle"},
-    { name: "LEFTBOTTOM_SYM", text: "@left-bottom"},
-    { name: "RIGHTTOP_SYM", text: "@right-top"},
-    { name: "RIGHTMIDDLE_SYM", text: "@right-middle"},
-    { name: "RIGHTBOTTOM_SYM", text: "@right-bottom"},
-
-    /*
-     * The following token names are defined in CSS3 Media Queries: http://www.w3.org/TR/css3-mediaqueries/#syntax
-     */
-    /*{ name: "MEDIA_ONLY", state: "media"},
-    { name: "MEDIA_NOT", state: "media"},
-    { name: "MEDIA_AND", state: "media"},*/
-    { name: "RESOLUTION", state: "media"},
-
-    /*
-     * The following token names are not defined in any CSS specification but are used by the lexer.
-     */
-
-    //not a real token, but useful for stupid IE filters
-    { name: "IE_FUNCTION" },
-
-    //part of CSS3 grammar but not the Flex code
-    { name: "CHAR" },
-
-    //TODO: Needed?
-    //Not defined as tokens, but might as well be
-    {
-        name: "PIPE",
-        text: "|"
-    },
-    {
-        name: "SLASH",
-        text: "/"
-    },
-    {
-        name: "MINUS",
-        text: "-"
-    },
-    {
-        name: "STAR",
-        text: "*"
-    },
-
-    {
-        name: "LBRACE",
-        text: "{"
-    },
-    {
-        name: "RBRACE",
-        text: "}"
-    },
-    {
-        name: "LBRACKET",
-        text: "["
-    },
-    {
-        name: "RBRACKET",
-        text: "]"
-    },
-    {
-        name: "EQUALS",
-        text: "="
-    },
-    {
-        name: "COLON",
-        text: ":"
-    },
-    {
-        name: "SEMICOLON",
-        text: ";"
-    },
-
-    {
-        name: "LPAREN",
-        text: "("
-    },
-    {
-        name: "RPAREN",
-        text: ")"
-    },
-    {
-        name: "DOT",
-        text: "."
-    }
-];
-
-(function(){
-
-    var nameMap = [],
-        typeMap = {};
-
-    Tokens.UNKNOWN = -1;
-    Tokens.unshift({name:"EOF"});
-    for (var i=0, len = Tokens.length; i < len; i++){
-        nameMap.push(Tokens[i].name);
-        Tokens[Tokens[i].name] = i;
-        if (Tokens[i].text){
-            if (Tokens[i].text instanceof Array){
-                for (var j=0; j < Tokens[i].text.length; j++){
-                    typeMap[Tokens[i].text[j]] = i;
-                }
-            } else {
-                typeMap[Tokens[i].text] = i;
-            }
-        }
-    }
-
-    Tokens.name = function(tt){
-        return nameMap[tt];
-    };
-
-    Tokens.type = function(c){
-        return typeMap[c] || -1;
-    };
-
-})();
-
-
-
-
-//This file will likely change a lot! Very experimental!
-/*global Properties, ValidationTypes, ValidationError, PropertyValueIterator */
-var Validation = {
-
-    validate: function(property, value){
-
-        //normalize name
-        var name        = property.toString().toLowerCase(),
-            parts       = value.parts,
-            expression  = new PropertyValueIterator(value),
-            spec        = Properties[name],
-            part,
-            valid,
-            j, count,
-            msg,
-            types,
-            last,
-            literals,
-            max, multi, group;
-
-        if (!spec) {
-            if (name.indexOf("-") !== 0){    //vendor prefixed are ok
-                throw new ValidationError("Unknown property '" + property + "'.", property.line, property.col);
-            }
-        } else if (typeof spec != "number"){
-
-            //initialization
-            if (typeof spec == "string"){
-                if (spec.indexOf("||") > -1) {
-                    this.groupProperty(spec, expression);
-                } else {
-                    this.singleProperty(spec, expression, 1);
-                }
-
-            } else if (spec.multi) {
-                this.multiProperty(spec.multi, expression, spec.comma, spec.max || Infinity);
-            } else if (typeof spec == "function") {
-                spec(expression);
-            }
-
-        }
-
-    },
-
-    singleProperty: function(types, expression, max, partial) {
-
-        var result      = false,
-            value       = expression.value,
-            count       = 0,
-            part;
-
-        while (expression.hasNext() && count < max) {
-            result = ValidationTypes.isAny(expression, types);
-            if (!result) {
-                break;
-            }
-            count++;
-        }
-
-        if (!result) {
-            if (expression.hasNext() && !expression.isFirst()) {
-                part = expression.peek();
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                 throw new ValidationError("Expected (" + types + ") but found '" + value + "'.", value.line, value.col);
-            }
-        } else if (expression.hasNext()) {
-            part = expression.next();
-            throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-        }
-
-    },
-
-    multiProperty: function (types, expression, comma, max) {
-
-        var result      = false,
-            value       = expression.value,
-            count       = 0,
-            sep         = false,
-            part;
-
-        while(expression.hasNext() && !result && count < max) {
-            if (ValidationTypes.isAny(expression, types)) {
-                count++;
-                if (!expression.hasNext()) {
-                    result = true;
-
-                } else if (comma) {
-                    if (expression.peek() == ",") {
-                        part = expression.next();
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                break;
-
-            }
-        }
-
-        if (!result) {
-            if (expression.hasNext() && !expression.isFirst()) {
-                part = expression.peek();
-                throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                part = expression.previous();
-                if (comma && part == ",") {
-                    throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-                } else {
-                    throw new ValidationError("Expected (" + types + ") but found '" + value + "'.", value.line, value.col);
-                }
-            }
-
-        } else if (expression.hasNext()) {
-            part = expression.next();
-            throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-        }
-
-    },
-
-    groupProperty: function (types, expression, comma) {
-
-        var result      = false,
-            value       = expression.value,
-            typeCount   = types.split("||").length,
-            groups      = { count: 0 },
-            partial     = false,
-            name,
-            part;
-
-        while(expression.hasNext() && !result) {
-            name = ValidationTypes.isAnyOfGroup(expression, types);
-            if (name) {
-
-                //no dupes
-                if (groups[name]) {
-                    break;
-                } else {
-                    groups[name] = 1;
-                    groups.count++;
-                    partial = true;
-
-                    if (groups.count == typeCount || !expression.hasNext()) {
-                        result = true;
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-
-        if (!result) {
-            if (partial && expression.hasNext()) {
-                    part = expression.peek();
-                    throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-            } else {
-                throw new ValidationError("Expected (" + types + ") but found '" + value + "'.", value.line, value.col);
-            }
-        } else if (expression.hasNext()) {
-            part = expression.next();
-            throw new ValidationError("Expected end of value but found '" + part + "'.", part.line, part.col);
-        }
-    }
-
-
-
-};
-/**
- * Type to use when a validation error occurs.
- * @class ValidationError
- * @namespace parserlib.util
- * @constructor
- * @param {String} message The error message.
- * @param {int} line The line at which the error occurred.
- * @param {int} col The column at which the error occurred.
- */
-function ValidationError(message, line, col){
-
-    /**
-     * The column at which the error occurred.
-     * @type int
-     * @property col
-     */
-    this.col = col;
-
-    /**
-     * The line at which the error occurred.
-     * @type int
-     * @property line
-     */
-    this.line = line;
-
-    /**
-     * The text representation of the unit.
-     * @type String
-     * @property text
-     */
-    this.message = message;
-
-}
-
-//inherit from Error
-ValidationError.prototype = new Error();
-//This file will likely change a lot! Very experimental!
-/*global Properties, Validation, ValidationError, PropertyValueIterator, console*/
-var ValidationTypes = {
-
-    isLiteral: function (part, literals) {
-        var text = part.text.toString().toLowerCase(),
-            args = literals.split(" | "),
-            i, len, found = false;
-
-        for (i=0,len=args.length; i < len && !found; i++){
-            if (text == args[i].toLowerCase()){
-                found = true;
-            }
-        }
-
-        return found;
-    },
-
-    isSimple: function(type) {
-        return !!this.simple[type];
-    },
-
-    isComplex: function(type) {
-        return !!this.complex[type];
-    },
-
-    /**
-     * Determines if the next part(s) of the given expression
-     * are any of the given types.
-     */
-    isAny: function (expression, types) {
-        var args = types.split(" | "),
-            i, len, found = false;
-
-        for (i=0,len=args.length; i < len && !found && expression.hasNext(); i++){
-            found = this.isType(expression, args[i]);
-        }
-
-        return found;
-    },
-
-    /**
-     * Determines if the next part(s) of the given expression
-     * are one of a group.
-     */
-    isAnyOfGroup: function(expression, types) {
-        var args = types.split(" || "),
-            i, len, found = false;
-
-        for (i=0,len=args.length; i < len && !found; i++){
-            found = this.isType(expression, args[i]);
-        }
-
-        return found ? args[i-1] : false;
-    },
-
-    /**
-     * Determines if the next part(s) of the given expression
-     * are of a given type.
-     */
-    isType: function (expression, type) {
-        var part = expression.peek(),
-            result = false;
-
-        if (type.charAt(0) != "<") {
-            result = this.isLiteral(part, type);
-            if (result) {
-                expression.next();
-            }
-        } else if (this.simple[type]) {
-            result = this.simple[type](part);
-            if (result) {
-                expression.next();
-            }
-        } else {
-            result = this.complex[type](expression);
-        }
-
-        return result;
-    },
-
-
-
-    simple: {
-
-        "<absolute-size>": function(part){
-            return ValidationTypes.isLiteral(part, "xx-small | x-small | small | medium | large | x-large | xx-large");
-        },
-
-        "<attachment>": function(part){
-            return ValidationTypes.isLiteral(part, "scroll | fixed | local");
-        },
-
-        "<attr>": function(part){
-            return part.type == "function" && part.name == "attr";
-        },
-
-        "<bg-image>": function(part){
-            return this["<image>"](part) || this["<gradient>"](part) ||  part == "none";
-        },
-
-        "<gradient>": function(part) {
-            return part.type == "function" && /^(?:\-(?:ms|moz|o|webkit)\-)?(?:repeating\-)?(?:radial\-|linear\-)?gradient/i.test(part);
-        },
-
-        "<box>": function(part){
-            return ValidationTypes.isLiteral(part, "padding-box | border-box | content-box");
-        },
-
-        "<content>": function(part){
-            return part.type == "function" && part.name == "content";
-        },
-
-        "<relative-size>": function(part){
-            return ValidationTypes.isLiteral(part, "smaller | larger");
-        },
-
-        //any identifier
-        "<ident>": function(part){
-            return part.type == "identifier";
-        },
-
-        "<length>": function(part){
-            if (part.type == "function" && /^(?:\-(?:ms|moz|o|webkit)\-)?calc/i.test(part)){
-                return true;
-            }else{
-                return part.type == "length" || part.type == "number" || part.type == "integer" || part == "0";
-            }
-        },
-
-        "<color>": function(part){
-            return part.type == "color" || part == "transparent";
-        },
-
-        "<number>": function(part){
-            return part.type == "number" || this["<integer>"](part);
-        },
-
-        "<integer>": function(part){
-            return part.type == "integer";
-        },
-
-        "<line>": function(part){
-            return part.type == "integer";
-        },
-
-        "<angle>": function(part){
-            return part.type == "angle";
-        },
-
-        "<uri>": function(part){
-            return part.type == "uri";
-        },
-
-        "<image>": function(part){
-            return this["<uri>"](part);
-        },
-
-        "<percentage>": function(part){
-            return part.type == "percentage" || part == "0";
-        },
-
-        "<border-width>": function(part){
-            return this["<length>"](part) || ValidationTypes.isLiteral(part, "thin | medium | thick");
-        },
-
-        "<border-style>": function(part){
-            return ValidationTypes.isLiteral(part, "none | hidden | dotted | dashed | solid | double | groove | ridge | inset | outset");
-        },
-
-        "<margin-width>": function(part){
-            return this["<length>"](part) || this["<percentage>"](part) || ValidationTypes.isLiteral(part, "auto");
-        },
-
-        "<padding-width>": function(part){
-            return this["<length>"](part) || this["<percentage>"](part);
-        },
-
-        "<shape>": function(part){
-            return part.type == "function" && (part.name == "rect" || part.name == "inset-rect");
-        },
-
-        "<time>": function(part) {
-            return part.type == "time";
-        }
-    },
-
-    complex: {
-
-        "<bg-position>": function(expression){
-            var types   = this,
-                result  = false,
-                numeric = "<percentage> | <length>",
-                xDir    = "left | right",
-                yDir    = "top | bottom",
-                count = 0,
-                hasNext = function() {
-                    return expression.hasNext() && expression.peek() != ",";
-                };
-
-            while (expression.peek(count) && expression.peek(count) != ",") {
-                count++;
-            }
-
-/*
-<position> = [
-  [ left | center | right | top | bottom | <percentage> | <length> ]
-|
-  [ left | center | right | <percentage> | <length> ]
-  [ top | center | bottom | <percentage> | <length> ]
-|
-  [ center | [ left | right ] [ <percentage> | <length> ]? ] &&
-  [ center | [ top | bottom ] [ <percentage> | <length> ]? ]
-]
-*/
-
-            if (count < 3) {
-                if (ValidationTypes.isAny(expression, xDir + " | center | " + numeric)) {
-                        result = true;
-                        ValidationTypes.isAny(expression, yDir + " | center | " + numeric);
-                } else if (ValidationTypes.isAny(expression, yDir)) {
-                        result = true;
-                        ValidationTypes.isAny(expression, xDir + " | center");
-                }
-            } else {
-                if (ValidationTypes.isAny(expression, xDir)) {
-                    if (ValidationTypes.isAny(expression, yDir)) {
-                        result = true;
-                        ValidationTypes.isAny(expression, numeric);
-                    } else if (ValidationTypes.isAny(expression, numeric)) {
-                        if (ValidationTypes.isAny(expression, yDir)) {
-                            result = true;
-                            ValidationTypes.isAny(expression, numeric);
-                        } else if (ValidationTypes.isAny(expression, "center")) {
-                            result = true;
-                        }
-                    }
-                } else if (ValidationTypes.isAny(expression, yDir)) {
-                    if (ValidationTypes.isAny(expression, xDir)) {
-                        result = true;
-                        ValidationTypes.isAny(expression, numeric);
-                    } else if (ValidationTypes.isAny(expression, numeric)) {
-                        if (ValidationTypes.isAny(expression, xDir)) {
-                                result = true;
-                                ValidationTypes.isAny(expression, numeric);
-                        } else if (ValidationTypes.isAny(expression, "center")) {
-                            result = true;
-                        }
-                    }
-                } else if (ValidationTypes.isAny(expression, "center")) {
-                    if (ValidationTypes.isAny(expression, xDir + " | " + yDir)) {
-                        result = true;
-                        ValidationTypes.isAny(expression, numeric);
-                    }
-                }
-            }
-
-            return result;
-        },
-
-        "<bg-size>": function(expression){
-            //<bg-size> = [ <length> | <percentage> | auto ]{1,2} | cover | contain
-            var types   = this,
-                result  = false,
-                numeric = "<percentage> | <length> | auto",
-                part,
-                i, len;
-
-            if (ValidationTypes.isAny(expression, "cover | contain")) {
-                result = true;
-            } else if (ValidationTypes.isAny(expression, numeric)) {
-                result = true;
-                ValidationTypes.isAny(expression, numeric);
-            }
-
-            return result;
-        },
-
-        "<repeat-style>": function(expression){
-            //repeat-x | repeat-y | [repeat | space | round | no-repeat]{1,2}
-            var result  = false,
-                values  = "repeat | space | round | no-repeat",
-                part;
-
-            if (expression.hasNext()){
-                part = expression.next();
-
-                if (ValidationTypes.isLiteral(part, "repeat-x | repeat-y")) {
-                    result = true;
-                } else if (ValidationTypes.isLiteral(part, values)) {
-                    result = true;
-
-                    if (expression.hasNext() && ValidationTypes.isLiteral(expression.peek(), values)) {
-                        expression.next();
-                    }
-                }
-            }
-
-            return result;
-
-        },
-
-        "<shadow>": function(expression) {
-            //inset? && [ <length>{2,4} && <color>? ]
-            var result  = false,
-                count   = 0,
-                inset   = false,
-                color   = false,
-                part;
-
-            if (expression.hasNext()) {
-
-                if (ValidationTypes.isAny(expression, "inset")){
-                    inset = true;
-                }
-
-                if (ValidationTypes.isAny(expression, "<color>")) {
-                    color = true;
-                }
-
-                while (ValidationTypes.isAny(expression, "<length>") && count < 4) {
-                    count++;
-                }
-
-
-                if (expression.hasNext()) {
-                    if (!color) {
-                        ValidationTypes.isAny(expression, "<color>");
-                    }
-
-                    if (!inset) {
-                        ValidationTypes.isAny(expression, "inset");
-                    }
-
-                }
-
-                result = (count >= 2 && count <= 4);
-
-            }
-
-            return result;
-        },
-
-        "<x-one-radius>": function(expression) {
-            //[ <length> | <percentage> ] [ <length> | <percentage> ]?
-            var result  = false,
-                simple = "<length> | <percentage> | inherit";
-
-            if (ValidationTypes.isAny(expression, simple)){
-                result = true;
-                ValidationTypes.isAny(expression, simple);
-            }
-
-            return result;
-        }
-    }
-};
-
-
-
-parserlib.css = {
-Colors              :Colors,
-Combinator          :Combinator,
-Parser              :Parser,
-PropertyName        :PropertyName,
-PropertyValue       :PropertyValue,
-PropertyValuePart   :PropertyValuePart,
-MediaFeature        :MediaFeature,
-MediaQuery          :MediaQuery,
-Selector            :Selector,
-SelectorPart        :SelectorPart,
-SelectorSubPart     :SelectorSubPart,
-Specificity         :Specificity,
-TokenStream         :TokenStream,
-Tokens              :Tokens,
-ValidationError     :ValidationError
-};
-})();
-
-
-
-
-(function(){
-for(var prop in parserlib){
-exports[prop] = parserlib[prop];
-}
-})();
-
-
-/**
- * Main CSSLint object.
- * @class CSSLint
- * @static
- * @extends parserlib.util.EventTarget
- */
-/*global parserlib, Reporter*/
-var CSSLint = (function(){
-
-    var rules           = [],
-        formatters      = [],
-        embeddedRuleset = /\/\*csslint([^\*]*)\*\//,
-        api             = new parserlib.util.EventTarget();
-
-    api.version = "0.10.0";
-
-    //-------------------------------------------------------------------------
-    // Rule Management
-    //-------------------------------------------------------------------------
-
-    /**
-     * Adds a new rule to the engine.
-     * @param {Object} rule The rule to add.
-     * @method addRule
-     */
-    api.addRule = function(rule){
-        rules.push(rule);
-        rules[rule.id] = rule;
-    };
-
-    /**
-     * Clears all rule from the engine.
-     * @method clearRules
-     */
-    api.clearRules = function(){
-        rules = [];
-    };
-
-    /**
-     * Returns the rule objects.
-     * @return An array of rule objects.
-     * @method getRules
-     */
-    api.getRules = function(){
-        return [].concat(rules).sort(function(a,b){
-            return a.id > b.id ? 1 : 0;
-        });
-    };
-
-    /**
-     * Returns a ruleset configuration object with all current rules.
-     * @return A ruleset object.
-     * @method getRuleset
-     */
-    api.getRuleset = function() {
-        var ruleset = {},
-            i = 0,
-            len = rules.length;
-
-        while (i < len){
-            ruleset[rules[i++].id] = 1;    //by default, everything is a warning
-        }
-
-        return ruleset;
-    };
-
-    /**
-     * Returns a ruleset object based on embedded rules.
-     * @param {String} text A string of css containing embedded rules.
-     * @param {Object} ruleset A ruleset object to modify.
-     * @return {Object} A ruleset object.
-     * @method getEmbeddedRuleset
-     */
-    function applyEmbeddedRuleset(text, ruleset){
-        var valueMap,
-            embedded = text && text.match(embeddedRuleset),
-            rules = embedded && embedded[1];
-
-        if (rules) {
-            valueMap = {
-                "true": 2,  // true is error
-                "": 1,      // blank is warning
-                "false": 0, // false is ignore
-
-                "2": 2,     // explicit error
-                "1": 1,     // explicit warning
-                "0": 0      // explicit ignore
-            };
-
-            rules.toLowerCase().split(",").forEach(function(rule){
-                var pair = rule.split(":"),
-                    property = pair[0] || "",
-                    value = pair[1] || "";
-
-                ruleset[property.trim()] = valueMap[value.trim()];
-            });
-        }
-
-        return ruleset;
-    }
-
-    //-------------------------------------------------------------------------
-    // Formatters
-    //-------------------------------------------------------------------------
-
-    /**
-     * Adds a new formatter to the engine.
-     * @param {Object} formatter The formatter to add.
-     * @method addFormatter
-     */
-    api.addFormatter = function(formatter) {
-        // formatters.push(formatter);
-        formatters[formatter.id] = formatter;
-    };
-
-    /**
-     * Retrieves a formatter for use.
-     * @param {String} formatId The name of the format to retrieve.
-     * @return {Object} The formatter or undefined.
-     * @method getFormatter
-     */
-    api.getFormatter = function(formatId){
-        return formatters[formatId];
-    };
-
-    /**
-     * Formats the results in a particular format for a single file.
-     * @param {Object} result The results returned from CSSLint.verify().
-     * @param {String} filename The filename for which the results apply.
-     * @param {String} formatId The name of the formatter to use.
-     * @param {Object} options (Optional) for special output handling.
-     * @return {String} A formatted string for the results.
-     * @method format
-     */
-    api.format = function(results, filename, formatId, options) {
-        var formatter = this.getFormatter(formatId),
-            result = null;
-
-        if (formatter){
-            result = formatter.startFormat();
-            result += formatter.formatResults(results, filename, options || {});
-            result += formatter.endFormat();
-        }
-
-        return result;
-    };
-
-    /**
-     * Indicates if the given format is supported.
-     * @param {String} formatId The ID of the format to check.
-     * @return {Boolean} True if the format exists, false if not.
-     * @method hasFormat
-     */
-    api.hasFormat = function(formatId){
-        return formatters.hasOwnProperty(formatId);
-    };
-
-    //-------------------------------------------------------------------------
-    // Verification
-    //-------------------------------------------------------------------------
-
-    /**
-     * Starts the verification process for the given CSS text.
-     * @param {String} text The CSS text to verify.
-     * @param {Object} ruleset (Optional) List of rules to apply. If null, then
-     *      all rules are used. If a rule has a value of 1 then it's a warning,
-     *      a value of 2 means it's an error.
-     * @return {Object} Results of the verification.
-     * @method verify
-     */
-    api.verify = function(text, ruleset){
-
-        var i       = 0,
-            len     = rules.length,
-            reporter,
-            lines,
-            report,
-            parser = new parserlib.css.Parser({ starHack: true, ieFilters: true,
-                                                underscoreHack: true, strict: false });
-
-        // normalize line endings
-        lines = text.replace(/\n\r?/g, "$split$").split('$split$');
-
-        if (!ruleset){
-            ruleset = this.getRuleset();
-        }
-
-        if (embeddedRuleset.test(text)){
-            ruleset = applyEmbeddedRuleset(text, ruleset);
-        }
-
-        reporter = new Reporter(lines, ruleset);
-
-        ruleset.errors = 2;       //always report parsing errors as errors
-        for (i in ruleset){
-            if(ruleset.hasOwnProperty(i) && ruleset[i]){
-                if (rules[i]){
-                    rules[i].init(parser, reporter);
-                }
-            }
-        }
-
-
-        //capture most horrible error type
-        try {
-            parser.parse(text);
-        } catch (ex) {
-            reporter.error("Fatal error, cannot continue: " + ex.message, ex.line, ex.col, {});
-        }
-
-        report = {
-            messages    : reporter.messages,
-            stats       : reporter.stats,
-            ruleset     : reporter.ruleset
-        };
-
-        //sort by line numbers, rollups at the bottom
-        report.messages.sort(function (a, b){
-            if (a.rollup && !b.rollup){
-                return 1;
-            } else if (!a.rollup && b.rollup){
-                return -1;
-            } else {
-                return a.line - b.line;
-            }
-        });
-
-        return report;
-    };
-
-    //-------------------------------------------------------------------------
-    // Publish the API
-    //-------------------------------------------------------------------------
-
-    return api;
-
-})();
-
-/*global CSSLint*/
-/**
- * An instance of Report is used to report results of the
- * verification back to the main API.
- * @class Reporter
- * @constructor
- * @param {String[]} lines The text lines of the source.
- * @param {Object} ruleset The set of rules to work with, including if
- *      they are errors or warnings.
- */
-function Reporter(lines, ruleset){
-
-    /**
-     * List of messages being reported.
-     * @property messages
-     * @type String[]
-     */
-    this.messages = [];
-
-    /**
-     * List of statistics being reported.
-     * @property stats
-     * @type String[]
-     */
-    this.stats = [];
-
-    /**
-     * Lines of code being reported on. Used to provide contextual information
-     * for messages.
-     * @property lines
-     * @type String[]
-     */
-    this.lines = lines;
-
-    /**
-     * Information about the rules. Used to determine whether an issue is an
-     * error or warning.
-     * @property ruleset
-     * @type Object
-     */
-    this.ruleset = ruleset;
-}
-
-Reporter.prototype = {
-
-    //restore constructor
-    constructor: Reporter,
-
-    /**
-     * Report an error.
-     * @param {String} message The message to store.
-     * @param {int} line The line number.
-     * @param {int} col The column number.
-     * @param {Object} rule The rule this message relates to.
-     * @method error
-     */
-    error: function(message, line, col, rule){
-        this.messages.push({
-            type    : "error",
-            line    : line,
-            col     : col,
-            message : message,
-            evidence: this.lines[line-1],
-            rule    : rule || {}
-        });
-    },
-
-    /**
-     * Report an warning.
-     * @param {String} message The message to store.
-     * @param {int} line The line number.
-     * @param {int} col The column number.
-     * @param {Object} rule The rule this message relates to.
-     * @method warn
-     * @deprecated Use report instead.
-     */
-    warn: function(message, line, col, rule){
-        this.report(message, line, col, rule);
-    },
-
-    /**
-     * Report an issue.
-     * @param {String} message The message to store.
-     * @param {int} line The line number.
-     * @param {int} col The column number.
-     * @param {Object} rule The rule this message relates to.
-     * @method report
-     */
-    report: function(message, line, col, rule){
-        this.messages.push({
-            type    : this.ruleset[rule.id] == 2 ? "error" : "warning",
-            line    : line,
-            col     : col,
-            message : message,
-            evidence: this.lines[line-1],
-            rule    : rule
-        });
-    },
-
-    /**
-     * Report some informational text.
-     * @param {String} message The message to store.
-     * @param {int} line The line number.
-     * @param {int} col The column number.
-     * @param {Object} rule The rule this message relates to.
-     * @method info
-     */
-    info: function(message, line, col, rule){
-        this.messages.push({
-            type    : "info",
-            line    : line,
-            col     : col,
-            message : message,
-            evidence: this.lines[line-1],
-            rule    : rule
-        });
-    },
-
-    /**
-     * Report some rollup error information.
-     * @param {String} message The message to store.
-     * @param {Object} rule The rule this message relates to.
-     * @method rollupError
-     */
-    rollupError: function(message, rule){
-        this.messages.push({
-            type    : "error",
-            rollup  : true,
-            message : message,
-            rule    : rule
-        });
-    },
-
-    /**
-     * Report some rollup warning information.
-     * @param {String} message The message to store.
-     * @param {Object} rule The rule this message relates to.
-     * @method rollupWarn
-     */
-    rollupWarn: function(message, rule){
-        this.messages.push({
-            type    : "warning",
-            rollup  : true,
-            message : message,
-            rule    : rule
-        });
-    },
-
-    /**
-     * Report a statistic.
-     * @param {String} name The name of the stat to store.
-     * @param {Variant} value The value of the stat.
-     * @method stat
-     */
-    stat: function(name, value){
-        this.stats[name] = value;
-    }
-};
-
-//expose for testing purposes
-CSSLint._Reporter = Reporter;
-
-/*global CSSLint*/
-
-/*
- * Utility functions that make life easier.
- */
-CSSLint.Util = {
-    /*
-     * Adds all properties from supplier onto receiver,
-     * overwriting if the same name already exists on
-     * reciever.
-     * @param {Object} The object to receive the properties.
-     * @param {Object} The object to provide the properties.
-     * @return {Object} The receiver
-     */
-    mix: function(receiver, supplier){
-        var prop;
-
-        for (prop in supplier){
-            if (supplier.hasOwnProperty(prop)){
-                receiver[prop] = supplier[prop];
-            }
-        }
-
-        return prop;
-    },
-
-    /*
-     * Polyfill for array indexOf() method.
-     * @param {Array} values The array to search.
-     * @param {Variant} value The value to search for.
-     * @return {int} The index of the value if found, -1 if not.
-     */
-    indexOf: function(values, value){
-        if (values.indexOf){
-            return values.indexOf(value);
-        } else {
-            for (var i=0, len=values.length; i < len; i++){
-                if (values[i] === value){
-                    return i;
-                }
-            }
-            return -1;
-        }
-    },
-
-    /*
-     * Polyfill for array forEach() method.
-     * @param {Array} values The array to operate on.
-     * @param {Function} func The function to call on each item.
-     * @return {void}
-     */
-    forEach: function(values, func) {
-        if (values.forEach){
-            return values.forEach(func);
-        } else {
-            for (var i=0, len=values.length; i < len; i++){
-                func(values[i], i, values);
-            }
-        }
-    }
-};
-/*global CSSLint*/
-/*
- * Rule: Don't use adjoining classes (.foo.bar).
- */
-CSSLint.addRule({
-
-    //rule information
-    id: "adjoining-classes",
-    name: "Disallow adjoining classes",
-    desc: "Don't use adjoining classes.",
-    browsers: "IE6",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                classCount,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-                for (j=0; j < selector.parts.length; j++){
-                    part = selector.parts[j];
-                    if (part.type == parser.SELECTOR_PART_TYPE){
-                        classCount = 0;
-                        for (k=0; k < part.modifiers.length; k++){
-                            modifier = part.modifiers[k];
-                            if (modifier.type == "class"){
-                                classCount++;
-                            }
-                            if (classCount > 1){
-                                reporter.report("Don't use adjoining classes.", part.line, part.col, rule);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-});
-/*global CSSLint*/
-
-/*
- * Rule: Don't use width or height when using padding or border.
- */
-CSSLint.addRule({
-
-    //rule information
-    id: "box-model",
-    name: "Beware of broken box size",
-    desc: "Don't use width or height when using padding or border.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            widthProperties = {
-                border: 1,
-                "border-left": 1,
-                "border-right": 1,
-                padding: 1,
-                "padding-left": 1,
-                "padding-right": 1
-            },
-            heightProperties = {
-                border: 1,
-                "border-bottom": 1,
-                "border-top": 1,
-                padding: 1,
-                "padding-bottom": 1,
-                "padding-top": 1
-            },
-            properties,
-            boxSizing = false;
-
-        function startRule(){
-            properties = {};
-            boxSizing = false;
-        }
-
-        function endRule(){
-            var prop, value;
-
-            if (!boxSizing) {
-                if (properties.height){
-                    for (prop in heightProperties){
-                        if (heightProperties.hasOwnProperty(prop) && properties[prop]){
-                            value = properties[prop].value;
-                            //special case for padding
-                            if (!(prop == "padding" && value.parts.length === 2 && value.parts[0].value === 0)){
-                                reporter.report("Using height with " + prop + " can sometimes make elements larger than you expect.", properties[prop].line, properties[prop].col, rule);
-                            }
-                        }
-                    }
-                }
-
-                if (properties.width){
-                    for (prop in widthProperties){
-                        if (widthProperties.hasOwnProperty(prop) && properties[prop]){
-                            value = properties[prop].value;
-
-                            if (!(prop == "padding" && value.parts.length === 2 && value.parts[1].value === 0)){
-                                reporter.report("Using width with " + prop + " can sometimes make elements larger than you expect.", properties[prop].line, properties[prop].col, rule);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase();
-
-            if (heightProperties[name] || widthProperties[name]){
-                if (!/^0\S*$/.test(event.value) && !(name == "border" && event.value == "none")){
-                    properties[name] = { line: event.property.line, col: event.property.col, value: event.value };
-                }
-            } else {
-                if (/^(width|height)/i.test(name) && /^(length|percentage)/.test(event.value.parts[0].type)){
-                    properties[name] = 1;
-                } else if (name == "box-sizing") {
-                    boxSizing = true;
-                }
-            }
-
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-        parser.addListener("endpage", endRule);
-        parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
-    }
-
-});
-/*global CSSLint*/
-
-/*
- * Rule: box-sizing doesn't work in IE6 and IE7.
- */
-CSSLint.addRule({
-
-    //rule information
-    id: "box-sizing",
-    name: "Disallow use of box-sizing",
-    desc: "The box-sizing properties isn't supported in IE6 and IE7.",
-    browsers: "IE6, IE7",
-    tags: ["Compatibility"],
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase();
-
-            if (name == "box-sizing"){
-                reporter.report("The box-sizing property isn't supported in IE6 and IE7.", event.line, event.col, rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: Use the bulletproof @font-face syntax to avoid 404's in old IE
- * (http://www.fontspring.com/blog/the-new-bulletproof-font-face-syntax)
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "bulletproof-font-face",
-    name: "Use the bulletproof @font-face syntax",
-    desc: "Use the bulletproof @font-face syntax to avoid 404's in old IE (http://www.fontspring.com/blog/the-new-bulletproof-font-face-syntax).",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0,
-            fontFaceRule = false,
-            firstSrc     = true,
-            ruleFailed    = false,
-            line, col;
-
-        // Mark the start of a @font-face declaration so we only test properties inside it
-        parser.addListener("startfontface", function(event){
-            fontFaceRule = true;
-        });
-
-        parser.addListener("property", function(event){
-            // If we aren't inside an @font-face declaration then just return
-            if (!fontFaceRule) {
-                return;
-            }
-
-            var propertyName = event.property.toString().toLowerCase(),
-                value        = event.value.toString();
-
-            // Set the line and col numbers for use in the endfontface listener
-            line = event.line;
-            col  = event.col;
-
-            // This is the property that we care about, we can ignore the rest
-            if (propertyName === 'src') {
-                var regex = /^\s?url\(['"].+\.eot\?.*['"]\)\s*format\(['"]embedded-opentype['"]\).*$/i;
-
-                // We need to handle the advanced syntax with two src properties
-                if (!value.match(regex) && firstSrc) {
-                    ruleFailed = true;
-                    firstSrc = false;
-                } else if (value.match(regex) && !firstSrc) {
-                    ruleFailed = false;
-                }
-            }
-
-
-        });
-
-        // Back to normal rules that we don't need to test
-        parser.addListener("endfontface", function(event){
-            fontFaceRule = false;
-
-            if (ruleFailed) {
-                reporter.report("@font-face declaration doesn't follow the fontspring bulletproof syntax.", line, col, rule);
-            }
-        });
-    }
-});
-/*
- * Rule: Include all compatible vendor prefixes to reach a wider
- * range of users.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "compatible-vendor-prefixes",
-    name: "Require compatible vendor prefixes",
-    desc: "Include all compatible vendor prefixes to reach a wider range of users.",
-    browsers: "All",
-
-    //initialization
-    init: function (parser, reporter) {
-        var rule = this,
-            compatiblePrefixes,
-            properties,
-            prop,
-            variations,
-            prefixed,
-            i,
-            len,
-            inKeyFrame = false,
-            arrayPush = Array.prototype.push,
-            applyTo = [];
-
-        // See http://peter.sh/experiments/vendor-prefixed-css-property-overview/ for details
-        compatiblePrefixes = {
-            "animation"                  : "webkit moz",
-            "animation-delay"            : "webkit moz",
-            "animation-direction"        : "webkit moz",
-            "animation-duration"         : "webkit moz",
-            "animation-fill-mode"        : "webkit moz",
-            "animation-iteration-count"  : "webkit moz",
-            "animation-name"             : "webkit moz",
-            "animation-play-state"       : "webkit moz",
-            "animation-timing-function"  : "webkit moz",
-            "appearance"                 : "webkit moz",
-            "border-end"                 : "webkit moz",
-            "border-end-color"           : "webkit moz",
-            "border-end-style"           : "webkit moz",
-            "border-end-width"           : "webkit moz",
-            "border-image"               : "webkit moz o",
-            "border-radius"              : "webkit",
-            "border-start"               : "webkit moz",
-            "border-start-color"         : "webkit moz",
-            "border-start-style"         : "webkit moz",
-            "border-start-width"         : "webkit moz",
-            "box-align"                  : "webkit moz ms",
-            "box-direction"              : "webkit moz ms",
-            "box-flex"                   : "webkit moz ms",
-            "box-lines"                  : "webkit ms",
-            "box-ordinal-group"          : "webkit moz ms",
-            "box-orient"                 : "webkit moz ms",
-            "box-pack"                   : "webkit moz ms",
-            "box-sizing"                 : "webkit moz",
-            "box-shadow"                 : "webkit moz",
-            "column-count"               : "webkit moz ms",
-            "column-gap"                 : "webkit moz ms",
-            "column-rule"                : "webkit moz ms",
-            "column-rule-color"          : "webkit moz ms",
-            "column-rule-style"          : "webkit moz ms",
-            "column-rule-width"          : "webkit moz ms",
-            "column-width"               : "webkit moz ms",
-            "hyphens"                    : "epub moz",
-            "line-break"                 : "webkit ms",
-            "margin-end"                 : "webkit moz",
-            "margin-start"               : "webkit moz",
-            "marquee-speed"              : "webkit wap",
-            "marquee-style"              : "webkit wap",
-            "padding-end"                : "webkit moz",
-            "padding-start"              : "webkit moz",
-            "tab-size"                   : "moz o",
-            "text-size-adjust"           : "webkit ms",
-            "transform"                  : "webkit moz ms o",
-            "transform-origin"           : "webkit moz ms o",
-            "transition"                 : "webkit moz o",
-            "transition-delay"           : "webkit moz o",
-            "transition-duration"        : "webkit moz o",
-            "transition-property"        : "webkit moz o",
-            "transition-timing-function" : "webkit moz o",
-            "user-modify"                : "webkit moz",
-            "user-select"                : "webkit moz ms",
-            "word-break"                 : "epub ms",
-            "writing-mode"               : "epub ms"
-        };
-
-
-        for (prop in compatiblePrefixes) {
-            if (compatiblePrefixes.hasOwnProperty(prop)) {
-                variations = [];
-                prefixed = compatiblePrefixes[prop].split(' ');
-                for (i = 0, len = prefixed.length; i < len; i++) {
-                    variations.push('-' + prefixed[i] + '-' + prop);
-                }
-                compatiblePrefixes[prop] = variations;
-                arrayPush.apply(applyTo, variations);
-            }
-        }
-
-        parser.addListener("startrule", function () {
-            properties = [];
-        });
-
-        parser.addListener("startkeyframes", function (event) {
-            inKeyFrame = event.prefix || true;
-        });
-
-        parser.addListener("endkeyframes", function (event) {
-            inKeyFrame = false;
-        });
-
-        parser.addListener("property", function (event) {
-            var name = event.property;
-            if (CSSLint.Util.indexOf(applyTo, name.text) > -1) {
-
-                // e.g., -moz-transform is okay to be alone in @-moz-keyframes
-                if (!inKeyFrame || typeof inKeyFrame != "string" ||
-                        name.text.indexOf("-" + inKeyFrame + "-") !== 0) {
-                    properties.push(name);
-                }
-            }
-        });
-
-        parser.addListener("endrule", function (event) {
-            if (!properties.length) {
-                return;
-            }
-
-            var propertyGroups = {},
-                i,
-                len,
-                name,
-                prop,
-                variations,
-                value,
-                full,
-                actual,
-                item,
-                propertiesSpecified;
-
-            for (i = 0, len = properties.length; i < len; i++) {
-                name = properties[i];
-
-                for (prop in compatiblePrefixes) {
-                    if (compatiblePrefixes.hasOwnProperty(prop)) {
-                        variations = compatiblePrefixes[prop];
-                        if (CSSLint.Util.indexOf(variations, name.text) > -1) {
-                            if (!propertyGroups[prop]) {
-                                propertyGroups[prop] = {
-                                    full : variations.slice(0),
-                                    actual : [],
-                                    actualNodes: []
-                                };
-                            }
-                            if (CSSLint.Util.indexOf(propertyGroups[prop].actual, name.text) === -1) {
-                                propertyGroups[prop].actual.push(name.text);
-                                propertyGroups[prop].actualNodes.push(name);
-                            }
-                        }
-                    }
-                }
-            }
-
-            for (prop in propertyGroups) {
-                if (propertyGroups.hasOwnProperty(prop)) {
-                    value = propertyGroups[prop];
-                    full = value.full;
-                    actual = value.actual;
-
-                    if (full.length > actual.length) {
-                        for (i = 0, len = full.length; i < len; i++) {
-                            item = full[i];
-                            if (CSSLint.Util.indexOf(actual, item) === -1) {
-                                propertiesSpecified = (actual.length === 1) ? actual[0] : (actual.length == 2) ? actual.join(" and ") : actual.join(", ");
-                                reporter.report("The property " + item + " is compatible with " + propertiesSpecified + " and should be included as well.", value.actualNodes[0].line, value.actualNodes[0].col, rule);
-                            }
-                        }
-
-                    }
-                }
-            }
-        });
-    }
-});
-/*
- * Rule: Certain properties don't play well with certain display values.
- * - float should not be used with inline-block
- * - height, width, margin-top, margin-bottom, float should not be used with inline
- * - vertical-align should not be used with block
- * - margin, float should not be used with table-*
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "display-property-grouping",
-    name: "Require properties appropriate for display",
-    desc: "Certain properties shouldn't be used with certain display property values.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        var propertiesToCheck = {
-                display: 1,
-                "float": "none",
-                height: 1,
-                width: 1,
-                margin: 1,
-                "margin-left": 1,
-                "margin-right": 1,
-                "margin-bottom": 1,
-                "margin-top": 1,
-                padding: 1,
-                "padding-left": 1,
-                "padding-right": 1,
-                "padding-bottom": 1,
-                "padding-top": 1,
-                "vertical-align": 1
-            },
-            properties;
-
-        function reportProperty(name, display, msg){
-            if (properties[name]){
-                if (typeof propertiesToCheck[name] != "string" || properties[name].value.toLowerCase() != propertiesToCheck[name]){
-                    reporter.report(msg || name + " can't be used with display: " + display + ".", properties[name].line, properties[name].col, rule);
-                }
-            }
-        }
-
-        function startRule(){
-            properties = {};
-        }
-
-        function endRule(){
-
-            var display = properties.display ? properties.display.value : null;
-            if (display){
-                switch(display){
-
-                    case "inline":
-                        //height, width, margin-top, margin-bottom, float should not be used with inline
-                        reportProperty("height", display);
-                        reportProperty("width", display);
-                        reportProperty("margin", display);
-                        reportProperty("margin-top", display);
-                        reportProperty("margin-bottom", display);
-                        reportProperty("float", display, "display:inline has no effect on floated elements (but may be used to fix the IE6 double-margin bug).");
-                        break;
-
-                    case "block":
-                        //vertical-align should not be used with block
-                        reportProperty("vertical-align", display);
-                        break;
-
-                    case "inline-block":
-                        //float should not be used with inline-block
-                        reportProperty("float", display);
-                        break;
-
-                    default:
-                        //margin, float should not be used with table
-                        if (display.indexOf("table-") === 0){
-                            reportProperty("margin", display);
-                            reportProperty("margin-left", display);
-                            reportProperty("margin-right", display);
-                            reportProperty("margin-top", display);
-                            reportProperty("margin-bottom", display);
-                            reportProperty("float", display);
-                        }
-
-                        //otherwise do nothing
-                }
-            }
-
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startkeyframerule", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startpage", startRule);
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase();
-
-            if (propertiesToCheck[name]){
-                properties[name] = { value: event.value.text, line: event.property.line, col: event.property.col };
-            }
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-        parser.addListener("endkeyframerule", endRule);
-        parser.addListener("endpagemargin", endRule);
-        parser.addListener("endpage", endRule);
-
-    }
-
-});
-/*
- * Rule: Disallow duplicate background-images (using url).
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "duplicate-background-images",
-    name: "Disallow duplicate background images",
-    desc: "Every background-image should be unique. Use a common class for e.g. sprites.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            stack = {};
-
-        parser.addListener("property", function(event){
-            var name = event.property.text,
-                value = event.value,
-                i, len;
-
-            if (name.match(/background/i)) {
-                for (i=0, len=value.parts.length; i < len; i++) {
-                    if (value.parts[i].type == 'uri') {
-                        if (typeof stack[value.parts[i].uri] === 'undefined') {
-                            stack[value.parts[i].uri] = event;
-                        }
-                        else {
-                            reporter.report("Background image '" + value.parts[i].uri + "' was used multiple times, first declared at line " + stack[value.parts[i].uri].line + ", col " + stack[value.parts[i].uri].col + ".", event.line, event.col, rule);
-                        }
-                    }
-                }
-            }
-        });
-    }
-});
-/*
- * Rule: Duplicate properties must appear one after the other. If an already-defined
- * property appears somewhere else in the rule, then it's likely an error.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "duplicate-properties",
-    name: "Disallow duplicate properties",
-    desc: "Duplicate properties must appear one after the other.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            properties,
-            lastProperty;
-
-        function startRule(event){
-            properties = {};
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var property = event.property,
-                name = property.text.toLowerCase();
-
-            if (properties[name] && (lastProperty != name || properties[name] == event.value.text)){
-                reporter.report("Duplicate property '" + event.property + "' found.", event.line, event.col, rule);
-            }
-
-            properties[name] = event.value.text;
-            lastProperty = name;
-
-        });
-
-
-    }
-
-});
-/*
- * Rule: Style rules without any properties defined should be removed.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "empty-rules",
-    name: "Disallow empty rules",
-    desc: "Rules without any properties specified should be removed.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0;
-
-        parser.addListener("startrule", function(){
-            count=0;
-        });
-
-        parser.addListener("property", function(){
-            count++;
-        });
-
-        parser.addListener("endrule", function(event){
-            var selectors = event.selectors;
-            if (count === 0){
-                reporter.report("Rule is empty.", selectors[0].line, selectors[0].col, rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: There should be no syntax errors. (Duh.)
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "errors",
-    name: "Parsing Errors",
-    desc: "This rule looks for recoverable syntax errors.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("error", function(event){
-            reporter.error(event.message, event.line, event.col, rule);
-        });
-
-    }
-
-});
-
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "fallback-colors",
-    name: "Require fallback colors",
-    desc: "For older browsers that don't support RGBA, HSL, or HSLA, provide a fallback color.",
-    browsers: "IE6,IE7,IE8",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            lastProperty,
-            propertiesToCheck = {
-                color: 1,
-                background: 1,
-                "border-color": 1,
-                "border-top-color": 1,
-                "border-right-color": 1,
-                "border-bottom-color": 1,
-                "border-left-color": 1,
-                border: 1,
-                "border-top": 1,
-                "border-right": 1,
-                "border-bottom": 1,
-                "border-left": 1,
-                "background-color": 1
-            },
-            properties;
-
-        function startRule(event){
-            properties = {};
-            lastProperty = null;
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var property = event.property,
-                name = property.text.toLowerCase(),
-                parts = event.value.parts,
-                i = 0,
-                colorType = "",
-                len = parts.length;
-
-            if(propertiesToCheck[name]){
-                while(i < len){
-                    if (parts[i].type == "color"){
-                        if ("alpha" in parts[i] || "hue" in parts[i]){
-
-                            if (/([^\)]+)\(/.test(parts[i])){
-                                colorType = RegExp.$1.toUpperCase();
-                            }
-
-                            if (!lastProperty || (lastProperty.property.text.toLowerCase() != name || lastProperty.colorType != "compat")){
-                                reporter.report("Fallback " + name + " (hex or RGB) should precede " + colorType + " " + name + ".", event.line, event.col, rule);
-                            }
-                        } else {
-                            event.colorType = "compat";
-                        }
-                    }
-
-                    i++;
-                }
-            }
-
-            lastProperty = event;
-        });
-
-    }
-
-});
-/*
- * Rule: You shouldn't use more than 10 floats. If you do, there's probably
- * room for some abstraction.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "floats",
-    name: "Disallow too many floats",
-    desc: "This rule tests if the float property is used too many times",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-        var count = 0;
-
-        //count how many times "float" is used
-        parser.addListener("property", function(event){
-            if (event.property.text.toLowerCase() == "float" &&
-                    event.value.text.toLowerCase() != "none"){
-                count++;
-            }
-        });
-
-        //report the results
-        parser.addListener("endstylesheet", function(){
-            reporter.stat("floats", count);
-            if (count >= 10){
-                reporter.rollupWarn("Too many floats (" + count + "), you're probably using them for layout. Consider using a grid system instead.", rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: Avoid too many @font-face declarations in the same stylesheet.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "font-faces",
-    name: "Don't use too many web fonts",
-    desc: "Too many different web fonts in the same stylesheet.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0;
-
-
-        parser.addListener("startfontface", function(){
-            count++;
-        });
-
-        parser.addListener("endstylesheet", function(){
-            if (count > 5){
-                reporter.rollupWarn("Too many @font-face declarations (" + count + ").", rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: You shouldn't need more than 9 font-size declarations.
- */
-
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "font-sizes",
-    name: "Disallow too many font sizes",
-    desc: "Checks the number of font-size declarations.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0;
-
-        //check for use of "font-size"
-        parser.addListener("property", function(event){
-            if (event.property == "font-size"){
-                count++;
-            }
-        });
-
-        //report the results
-        parser.addListener("endstylesheet", function(){
-            reporter.stat("font-sizes", count);
-            if (count >= 10){
-                reporter.rollupWarn("Too many font-size declarations (" + count + "), abstraction needed.", rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: When using a vendor-prefixed gradient, make sure to use them all.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "gradients",
-    name: "Require all gradient definitions",
-    desc: "When using a vendor-prefixed gradient, make sure to use them all.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            gradients;
-
-        parser.addListener("startrule", function(){
-            gradients = {
-                moz: 0,
-                webkit: 0,
-                oldWebkit: 0,
-                o: 0
-            };
-        });
-
-        parser.addListener("property", function(event){
-
-            if (/\-(moz|o|webkit)(?:\-(?:linear|radial))\-gradient/i.test(event.value)){
-                gradients[RegExp.$1] = 1;
-            } else if (/\-webkit\-gradient/i.test(event.value)){
-                gradients.oldWebkit = 1;
-            }
-
-        });
-
-        parser.addListener("endrule", function(event){
-            var missing = [];
-
-            if (!gradients.moz){
-                missing.push("Firefox 3.6+");
-            }
-
-            if (!gradients.webkit){
-                missing.push("Webkit (Safari 5+, Chrome)");
-            }
-
-            if (!gradients.oldWebkit){
-                missing.push("Old Webkit (Safari 4+, Chrome)");
-            }
-
-            if (!gradients.o){
-                missing.push("Opera 11.1+");
-            }
-
-            if (missing.length && missing.length < 4){
-                reporter.report("Missing vendor-prefixed CSS gradients for " + missing.join(", ") + ".", event.selectors[0].line, event.selectors[0].col, rule);
-            }
-
-        });
-
-    }
-
-});
-
-/*
- * Rule: Don't use IDs for selectors.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "ids",
-    name: "Disallow IDs in selectors",
-    desc: "Selectors should not contain IDs.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                idCount,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-                idCount = 0;
-
-                for (j=0; j < selector.parts.length; j++){
-                    part = selector.parts[j];
-                    if (part.type == parser.SELECTOR_PART_TYPE){
-                        for (k=0; k < part.modifiers.length; k++){
-                            modifier = part.modifiers[k];
-                            if (modifier.type == "id"){
-                                idCount++;
-                            }
-                        }
-                    }
-                }
-
-                if (idCount == 1){
-                    reporter.report("Don't use IDs in selectors.", selector.line, selector.col, rule);
-                } else if (idCount > 1){
-                    reporter.report(idCount + " IDs in the selector, really?", selector.line, selector.col, rule);
-                }
-            }
-
-        });
-    }
-
-});
-/*
- * Rule: Don't use @import, use <link> instead.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "import",
-    name: "Disallow @import",
-    desc: "Don't use @import, use <link> instead.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("import", function(event){
-            reporter.report("@import prevents parallel downloads, use <link> instead.", event.line, event.col, rule);
-        });
-
-    }
-
-});
-/*
- * Rule: Make sure !important is not overused, this could lead to specificity
- * war. Display a warning on !important declarations, an error if it's
- * used more at least 10 times.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "important",
-    name: "Disallow !important",
-    desc: "Be careful when using !important declaration",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0;
-
-        //warn that important is used and increment the declaration counter
-        parser.addListener("property", function(event){
-            if (event.important === true){
-                count++;
-                reporter.report("Use of !important", event.line, event.col, rule);
-            }
-        });
-
-        //if there are more than 10, show an error
-        parser.addListener("endstylesheet", function(){
-            reporter.stat("important", count);
-            if (count >= 10){
-                reporter.rollupWarn("Too many !important declarations (" + count + "), try to use less than 10 to avoid specificity issues.", rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: Properties should be known (listed in CSS3 specification) or
- * be a vendor-prefixed property.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "known-properties",
-    name: "Require use of known properties",
-    desc: "Properties should be known (listed in CSS3 specification) or be a vendor-prefixed property.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase();
-
-            // the check is handled entirely by the parser-lib (https://github.com/nzakas/parser-lib)
-            if (event.invalid) {
-                reporter.report(event.invalid.message, event.line, event.col, rule);
-            }
-
-        });
-    }
-
-});
-/*
- * Rule: outline: none or outline: 0 should only be used in a :focus rule
- *       and only if there are other properties in the same rule.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "outline-none",
-    name: "Disallow outline: none",
-    desc: "Use of outline: none or outline: 0 should be limited to :focus rules.",
-    browsers: "All",
-    tags: ["Accessibility"],
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            lastRule;
-
-        function startRule(event){
-            if (event.selectors){
-                lastRule = {
-                    line: event.line,
-                    col: event.col,
-                    selectors: event.selectors,
-                    propCount: 0,
-                    outline: false
-                };
-            } else {
-                lastRule = null;
-            }
-        }
-
-        function endRule(event){
-            if (lastRule){
-                if (lastRule.outline){
-                    if (lastRule.selectors.toString().toLowerCase().indexOf(":focus") == -1){
-                        reporter.report("Outlines should only be modified using :focus.", lastRule.line, lastRule.col, rule);
-                    } else if (lastRule.propCount == 1) {
-                        reporter.report("Outlines shouldn't be hidden unless other visual changes are made.", lastRule.line, lastRule.col, rule);
-                    }
-                }
-            }
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase(),
-                value = event.value;
-
-            if (lastRule){
-                lastRule.propCount++;
-                if (name == "outline" && (value == "none" || value == "0")){
-                    lastRule.outline = true;
-                }
-            }
-
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-        parser.addListener("endpage", endRule);
-        parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
-
-    }
-
-});
-/*
- * Rule: Don't use classes or IDs with elements (a.foo or a#foo).
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "overqualified-elements",
-    name: "Disallow overqualified elements",
-    desc: "Don't use classes or IDs with elements (a.foo or a#foo).",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            classes = {};
-
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-
-                for (j=0; j < selector.parts.length; j++){
-                    part = selector.parts[j];
-                    if (part.type == parser.SELECTOR_PART_TYPE){
-                        for (k=0; k < part.modifiers.length; k++){
-                            modifier = part.modifiers[k];
-                            if (part.elementName && modifier.type == "id"){
-                                reporter.report("Element (" + part + ") is overqualified, just use " + modifier + " without element name.", part.line, part.col, rule);
-                            } else if (modifier.type == "class"){
-
-                                if (!classes[modifier]){
-                                    classes[modifier] = [];
-                                }
-                                classes[modifier].push({ modifier: modifier, part: part });
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        parser.addListener("endstylesheet", function(){
-
-            var prop;
-            for (prop in classes){
-                if (classes.hasOwnProperty(prop)){
-
-                    //one use means that this is overqualified
-                    if (classes[prop].length == 1 && classes[prop][0].part.elementName){
-                        reporter.report("Element (" + classes[prop][0].part + ") is overqualified, just use " + classes[prop][0].modifier + " without element name.", classes[prop][0].part.line, classes[prop][0].part.col, rule);
-                    }
-                }
-            }
-        });
-    }
-
-});
-/*
- * Rule: Headings (h1-h6) should not be qualified (namespaced).
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "qualified-headings",
-    name: "Disallow qualified headings",
-    desc: "Headings should not be qualified (namespaced).",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                i, j;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-
-                for (j=0; j < selector.parts.length; j++){
-                    part = selector.parts[j];
-                    if (part.type == parser.SELECTOR_PART_TYPE){
-                        if (part.elementName && /h[1-6]/.test(part.elementName.toString()) && j > 0){
-                            reporter.report("Heading (" + part.elementName + ") should not be qualified.", part.line, part.col, rule);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-});
-/*
- * Rule: Selectors that look like regular expressions are slow and should be avoided.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "regex-selectors",
-    name: "Disallow selectors that look like regexs",
-    desc: "Selectors that look like regular expressions are slow and should be avoided.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-                for (j=0; j < selector.parts.length; j++){
-                    part = selector.parts[j];
-                    if (part.type == parser.SELECTOR_PART_TYPE){
-                        for (k=0; k < part.modifiers.length; k++){
-                            modifier = part.modifiers[k];
-                            if (modifier.type == "attribute"){
-                                if (/([\~\|\^\$\*]=)/.test(modifier)){
-                                    reporter.report("Attribute selectors with " + RegExp.$1 + " are slow!", modifier.line, modifier.col, rule);
-                                }
-                            }
-
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-});
-/*
- * Rule: Total number of rules should not exceed x.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "rules-count",
-    name: "Rules Count",
-    desc: "Track how many rules there are.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            count = 0;
-
-        //count each rule
-        parser.addListener("startrule", function(){
-            count++;
-        });
-
-        parser.addListener("endstylesheet", function(){
-            reporter.stat("rule-count", count);
-        });
-    }
-
-});
-/*
- * Rule: Warn people with approaching the IE 4095 limit
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "selector-max-approaching",
-    name: "Warn when approaching the 4095 selector limit for IE",
-    desc: "Will warn when selector count is >= 3800 selectors.",
-    browsers: "IE",
-
-    //initialization
-    init: function(parser, reporter) {
-        var rule = this, count = 0;
-
-        parser.addListener('startrule', function(event) {
-            count += event.selectors.length;
-        });
-
-        parser.addListener("endstylesheet", function() {
-            if (count >= 3800) {
-                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule);
-            }
-        });
-    }
-
-});
-
-/*
- * Rule: Warn people past the IE 4095 limit
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "selector-max",
-    name: "Error when past the 4095 selector limit for IE",
-    desc: "Will error when selector count is > 4095.",
-    browsers: "IE",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this, count = 0;
-
-        parser.addListener('startrule',function(event) {
-            count += event.selectors.length;
-        });
-
-        parser.addListener("endstylesheet", function() {
-            if (count > 4095) {
-                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: Use shorthand properties where possible.
- *
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "shorthand",
-    name: "Require shorthand properties",
-    desc: "Use shorthand properties where possible.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            prop, i, len,
-            propertiesToCheck = {},
-            properties,
-            mapping = {
-                "margin": [
-                    "margin-top",
-                    "margin-bottom",
-                    "margin-left",
-                    "margin-right"
-                ],
-                "padding": [
-                    "padding-top",
-                    "padding-bottom",
-                    "padding-left",
-                    "padding-right"
-                ]
-            };
-
-        //initialize propertiesToCheck
-        for (prop in mapping){
-            if (mapping.hasOwnProperty(prop)){
-                for (i=0, len=mapping[prop].length; i < len; i++){
-                    propertiesToCheck[mapping[prop][i]] = prop;
-                }
-            }
-        }
-
-        function startRule(event){
-            properties = {};
-        }
-
-        //event handler for end of rules
-        function endRule(event){
-
-            var prop, i, len, total;
-
-            //check which properties this rule has
-            for (prop in mapping){
-                if (mapping.hasOwnProperty(prop)){
-                    total=0;
-
-                    for (i=0, len=mapping[prop].length; i < len; i++){
-                        total += properties[mapping[prop][i]] ? 1 : 0;
-                    }
-
-                    if (total == mapping[prop].length){
-                        reporter.report("The properties " + mapping[prop].join(", ") + " can be replaced by " + prop + ".", event.line, event.col, rule);
-                    }
-                }
-            }
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-
-        //check for use of "font-size"
-        parser.addListener("property", function(event){
-            var name = event.property.toString().toLowerCase(),
-                value = event.value.parts[0].value;
-
-            if (propertiesToCheck[name]){
-                properties[name] = 1;
-            }
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-
-    }
-
-});
-/*
- * Rule: Don't use properties with a star prefix.
- *
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "star-property-hack",
-    name: "Disallow properties with a star prefix",
-    desc: "Checks for the star property hack (targets IE6/7)",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        //check if property name starts with "*"
-        parser.addListener("property", function(event){
-            var property = event.property;
-
-            if (property.hack == "*") {
-                reporter.report("Property with star prefix found.", event.property.line, event.property.col, rule);
-            }
-        });
-    }
-});
-/*
- * Rule: Don't use text-indent for image replacement if you need to support rtl.
- *
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "text-indent",
-    name: "Disallow negative text-indent",
-    desc: "Checks for text indent less than -99px",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            textIndent,
-            direction;
-
-
-        function startRule(event){
-            textIndent = false;
-            direction = "inherit";
-        }
-
-        //event handler for end of rules
-        function endRule(event){
-            if (textIndent && direction != "ltr"){
-                reporter.report("Negative text-indent doesn't work well with RTL. If you use text-indent for image replacement explicitly set direction for that item to ltr.", textIndent.line, textIndent.col, rule);
-            }
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-
-        //check for use of "font-size"
-        parser.addListener("property", function(event){
-            var name = event.property.toString().toLowerCase(),
-                value = event.value;
-
-            if (name == "text-indent" && value.parts[0].value < -99){
-                textIndent = event.property;
-            } else if (name == "direction" && value == "ltr"){
-                direction = "ltr";
-            }
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-
-    }
-
-});
-/*
- * Rule: Don't use properties with a underscore prefix.
- *
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "underscore-property-hack",
-    name: "Disallow properties with an underscore prefix",
-    desc: "Checks for the underscore property hack (targets IE6)",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        //check if property name starts with "_"
-        parser.addListener("property", function(event){
-            var property = event.property;
-
-            if (property.hack == "_") {
-                reporter.report("Property with underscore prefix found.", event.property.line, event.property.col, rule);
-            }
-        });
-    }
-});
-/*
- * Rule: Headings (h1-h6) should be defined only once.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "unique-headings",
-    name: "Headings should only be defined once",
-    desc: "Headings should be defined only once.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        var headings =  {
-                h1: 0,
-                h2: 0,
-                h3: 0,
-                h4: 0,
-                h5: 0,
-                h6: 0
-            };
-
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                pseudo,
-                i, j;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-                part = selector.parts[selector.parts.length-1];
-
-                if (part.elementName && /(h[1-6])/i.test(part.elementName.toString())){
-
-                    for (j=0; j < part.modifiers.length; j++){
-                        if (part.modifiers[j].type == "pseudo"){
-                            pseudo = true;
-                            break;
-                        }
-                    }
-
-                    if (!pseudo){
-                        headings[RegExp.$1]++;
-                        if (headings[RegExp.$1] > 1) {
-                            reporter.report("Heading (" + part.elementName + ") has already been defined.", part.line, part.col, rule);
-                        }
-                    }
-                }
-            }
-        });
-
-        parser.addListener("endstylesheet", function(event){
-            var prop,
-                messages = [];
-
-            for (prop in headings){
-                if (headings.hasOwnProperty(prop)){
-                    if (headings[prop] > 1){
-                        messages.push(headings[prop] + " " + prop + "s");
-                    }
-                }
-            }
-
-            if (messages.length){
-                reporter.rollupWarn("You have " + messages.join(", ") + " defined in this stylesheet.", rule);
-            }
-        });
-    }
-
-});
-/*
- * Rule: Don't use universal selector because it's slow.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "universal-selector",
-    name: "Disallow universal selector",
-    desc: "The universal selector (*) is known to be slow.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("startrule", function(event){
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-
-                part = selector.parts[selector.parts.length-1];
-                if (part.elementName == "*"){
-                    reporter.report(rule.desc, part.line, part.col, rule);
-                }
-            }
-        });
-    }
-
-});
-/*
- * Rule: Don't use unqualified attribute selectors because they're just like universal selectors.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "unqualified-attributes",
-    name: "Disallow unqualified attribute selectors",
-    desc: "Unqualified attribute selectors are known to be slow.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        parser.addListener("startrule", function(event){
-
-            var selectors = event.selectors,
-                selector,
-                part,
-                modifier,
-                i, j, k;
-
-            for (i=0; i < selectors.length; i++){
-                selector = selectors[i];
-
-                part = selector.parts[selector.parts.length-1];
-                if (part.type == parser.SELECTOR_PART_TYPE){
-                    for (k=0; k < part.modifiers.length; k++){
-                        modifier = part.modifiers[k];
-                        if (modifier.type == "attribute" && (!part.elementName || part.elementName == "*")){
-                            reporter.report(rule.desc, part.line, part.col, rule);
-                        }
-                    }
-                }
-
-            }
-        });
-    }
-
-});
-/*
- * Rule: When using a vendor-prefixed property, make sure to
- * include the standard one.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "vendor-prefix",
-    name: "Require standard property with vendor prefix",
-    desc: "When using a vendor-prefixed property, make sure to include the standard one.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this,
-            properties,
-            num,
-            propertiesToCheck = {
-                "-webkit-border-radius": "border-radius",
-                "-webkit-border-top-left-radius": "border-top-left-radius",
-                "-webkit-border-top-right-radius": "border-top-right-radius",
-                "-webkit-border-bottom-left-radius": "border-bottom-left-radius",
-                "-webkit-border-bottom-right-radius": "border-bottom-right-radius",
-
-                "-o-border-radius": "border-radius",
-                "-o-border-top-left-radius": "border-top-left-radius",
-                "-o-border-top-right-radius": "border-top-right-radius",
-                "-o-border-bottom-left-radius": "border-bottom-left-radius",
-                "-o-border-bottom-right-radius": "border-bottom-right-radius",
-
-                "-moz-border-radius": "border-radius",
-                "-moz-border-radius-topleft": "border-top-left-radius",
-                "-moz-border-radius-topright": "border-top-right-radius",
-                "-moz-border-radius-bottomleft": "border-bottom-left-radius",
-                "-moz-border-radius-bottomright": "border-bottom-right-radius",
-
-                "-moz-column-count": "column-count",
-                "-webkit-column-count": "column-count",
-
-                "-moz-column-gap": "column-gap",
-                "-webkit-column-gap": "column-gap",
-
-                "-moz-column-rule": "column-rule",
-                "-webkit-column-rule": "column-rule",
-
-                "-moz-column-rule-style": "column-rule-style",
-                "-webkit-column-rule-style": "column-rule-style",
-
-                "-moz-column-rule-color": "column-rule-color",
-                "-webkit-column-rule-color": "column-rule-color",
-
-                "-moz-column-rule-width": "column-rule-width",
-                "-webkit-column-rule-width": "column-rule-width",
-
-                "-moz-column-width": "column-width",
-                "-webkit-column-width": "column-width",
-
-                "-webkit-column-span": "column-span",
-                "-webkit-columns": "columns",
-
-                "-moz-box-shadow": "box-shadow",
-                "-webkit-box-shadow": "box-shadow",
-
-                "-moz-transform" : "transform",
-                "-webkit-transform" : "transform",
-                "-o-transform" : "transform",
-                "-ms-transform" : "transform",
-
-                "-moz-transform-origin" : "transform-origin",
-                "-webkit-transform-origin" : "transform-origin",
-                "-o-transform-origin" : "transform-origin",
-                "-ms-transform-origin" : "transform-origin",
-
-                "-moz-box-sizing" : "box-sizing",
-                "-webkit-box-sizing" : "box-sizing",
-
-                "-moz-user-select" : "user-select",
-                "-khtml-user-select" : "user-select",
-                "-webkit-user-select" : "user-select"
-            };
-
-        //event handler for beginning of rules
-        function startRule(){
-            properties = {};
-            num=1;
-        }
-
-        //event handler for end of rules
-        function endRule(event){
-            var prop,
-                i, len,
-                standard,
-                needed,
-                actual,
-                needsStandard = [];
-
-            for (prop in properties){
-                if (propertiesToCheck[prop]){
-                    needsStandard.push({ actual: prop, needed: propertiesToCheck[prop]});
-                }
-            }
-
-            for (i=0, len=needsStandard.length; i < len; i++){
-                needed = needsStandard[i].needed;
-                actual = needsStandard[i].actual;
-
-                if (!properties[needed]){
-                    reporter.report("Missing standard property '" + needed + "' to go along with '" + actual + "'.", properties[actual][0].name.line, properties[actual][0].name.col, rule);
-                } else {
-                    //make sure standard property is last
-                    if (properties[needed][0].pos < properties[actual][0].pos){
-                        reporter.report("Standard property '" + needed + "' should come after vendor-prefixed property '" + actual + "'.", properties[actual][0].name.line, properties[actual][0].name.col, rule);
-                    }
-                }
-            }
-
-        }
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var name = event.property.text.toLowerCase();
-
-            if (!properties[name]){
-                properties[name] = [];
-            }
-
-            properties[name].push({ name: event.property, value : event.value, pos:num++ });
-        });
-
-        parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
-        parser.addListener("endpage", endRule);
-        parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
-    }
-
-});
-/*
- * Rule: You don't need to specify units when a value is 0.
- */
-/*global CSSLint*/
-CSSLint.addRule({
-
-    //rule information
-    id: "zero-units",
-    name: "Disallow units for 0 values",
-    desc: "You don't need to specify units when a value is 0.",
-    browsers: "All",
-
-    //initialization
-    init: function(parser, reporter){
-        var rule = this;
-
-        //count how many times "float" is used
-        parser.addListener("property", function(event){
-            var parts = event.value.parts,
-                i = 0,
-                len = parts.length;
-
-            while(i < len){
-                if ((parts[i].units || parts[i].type == "percentage") && parts[i].value === 0 && parts[i].type != "time"){
-                    reporter.report("Values of 0 shouldn't have units specified.", parts[i].line, parts[i].col, rule);
-                }
-                i++;
-            }
-
-        });
-
-    }
-
-});
-/*global CSSLint*/
-(function() {
-
-    /**
-     * Replace special characters before write to output.
-     *
-     * Rules:
-     *  - single quotes is the escape sequence for double-quotes
-     *  - &amp; is the escape sequence for &
-     *  - &lt; is the escape sequence for <
-     *  - &gt; is the escape sequence for >
-     *
-     * @param {String} message to escape
-     * @return escaped message as {String}
-     */
-    var xmlEscape = function(str) {
-        if (!str || str.constructor !== String) {
-            return "";
-        }
-
-        return str.replace(/[\"&><]/g, function(match) {
-            switch (match) {
-                case "\"":
-                    return "&quot;";
-                case "&":
-                    return "&amp;";
-                case "<":
-                    return "&lt;";
-                case ">":
-                    return "&gt;";
-            }
-        });
-    };
-
-    CSSLint.addFormatter({
-        //format information
-        id: "checkstyle-xml",
-        name: "Checkstyle XML format",
-
-        /**
-         * Return opening root XML tag.
-         * @return {String} to prepend before all results
-         */
-        startFormat: function(){
-            return "<?xml version=\"1.0\" encoding=\"utf-8\"?><checkstyle>";
-        },
-
-        /**
-         * Return closing root XML tag.
-         * @return {String} to append after all results
-         */
-        endFormat: function(){
-            return "</checkstyle>";
-        },
-
-        /**
-         * Returns message when there is a file read error.
-         * @param {String} filename The name of the file that caused the error.
-         * @param {String} message The error message
-         * @return {String} The error message.
-         */
-        readError: function(filename, message) {
-            return "<file name=\"" + xmlEscape(filename) + "\"><error line=\"0\" column=\"0\" severty=\"error\" message=\"" + xmlEscape(message) + "\"></error></file>";
-        },
-
-        /**
-         * Given CSS Lint results for a file, return output for this format.
-         * @param results {Object} with error and warning messages
-         * @param filename {String} relative file path
-         * @param options {Object} (UNUSED for now) specifies special handling of output
-         * @return {String} output for results
-         */
-        formatResults: function(results, filename, options) {
-            var messages = results.messages,
-                output = [];
-
-            /**
-             * Generate a source string for a rule.
-             * Checkstyle source strings usually resemble Java class names e.g
-             * net.csslint.SomeRuleName
-             * @param {Object} rule
-             * @return rule source as {String}
-             */
-            var generateSource = function(rule) {
-                if (!rule || !('name' in rule)) {
-                    return "";
-                }
-                return 'net.csslint.' + rule.name.replace(/\s/g,'');
-            };
-
-
-
-            if (messages.length > 0) {
-                output.push("<file name=\""+filename+"\">");
-                CSSLint.Util.forEach(messages, function (message, i) {
-                    //ignore rollups for now
-                    if (!message.rollup) {
-                      output.push("<error line=\"" + message.line + "\" column=\"" + message.col + "\" severity=\"" + message.type + "\"" +
-                          " message=\"" + xmlEscape(message.message) + "\" source=\"" + generateSource(message.rule) +"\"/>");
-                    }
-                });
-                output.push("</file>");
-            }
-
-            return output.join("");
-        }
-    });
-
-}());
-/*global CSSLint*/
-CSSLint.addFormatter({
-    //format information
-    id: "compact",
-    name: "Compact, 'porcelain' format",
-
-    /**
-     * Return content to be printed before all file results.
-     * @return {String} to prepend before all results
-     */
-    startFormat: function() {
-        return "";
-    },
-
-    /**
-     * Return content to be printed after all file results.
-     * @return {String} to append after all results
-     */
-    endFormat: function() {
-        return "";
-    },
-
-    /**
-     * Given CSS Lint results for a file, return output for this format.
-     * @param results {Object} with error and warning messages
-     * @param filename {String} relative file path
-     * @param options {Object} (Optional) specifies special handling of output
-     * @return {String} output for results
-     */
-    formatResults: function(results, filename, options) {
-        var messages = results.messages,
-            output = "";
-        options = options || {};
-
-        /**
-         * Capitalize and return given string.
-         * @param str {String} to capitalize
-         * @return {String} capitalized
-         */
-        var capitalize = function(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
-        };
-
-        if (messages.length === 0) {
-            return options.quiet ? "" : filename + ": Lint Free!";
-        }
-
-        CSSLint.Util.forEach(messages, function(message, i) {
-            if (message.rollup) {
-                output += filename + ": " + capitalize(message.type) + " - " + message.message + "\n";
-            } else {
-                output += filename + ": " + "line " + message.line +
-                    ", col " + message.col + ", " + capitalize(message.type) + " - " + message.message + "\n";
-            }
-        });
-
-        return output;
-    }
-});
-/*global CSSLint*/
-CSSLint.addFormatter({
-    //format information
-    id: "csslint-xml",
-    name: "CSSLint XML format",
-
-    /**
-     * Return opening root XML tag.
-     * @return {String} to prepend before all results
-     */
-    startFormat: function(){
-        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><csslint>";
-    },
-
-    /**
-     * Return closing root XML tag.
-     * @return {String} to append after all results
-     */
-    endFormat: function(){
-        return "</csslint>";
-    },
-
-    /**
-     * Given CSS Lint results for a file, return output for this format.
-     * @param results {Object} with error and warning messages
-     * @param filename {String} relative file path
-     * @param options {Object} (UNUSED for now) specifies special handling of output
-     * @return {String} output for results
-     */
-    formatResults: function(results, filename, options) {
-        var messages = results.messages,
-            output = [];
-
-        /**
-         * Replace special characters before write to output.
-         *
-         * Rules:
-         *  - single quotes is the escape sequence for double-quotes
-         *  - &amp; is the escape sequence for &
-         *  - &lt; is the escape sequence for <
-         *  - &gt; is the escape sequence for >
-         *
-         * @param {String} message to escape
-         * @return escaped message as {String}
-         */
-        var escapeSpecialCharacters = function(str) {
-            if (!str || str.constructor !== String) {
-                return "";
-            }
-            return str.replace(/\"/g, "'").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        };
-
-        if (messages.length > 0) {
-            output.push("<file name=\""+filename+"\">");
-            CSSLint.Util.forEach(messages, function (message, i) {
-                if (message.rollup) {
-                    output.push("<issue severity=\"" + message.type + "\" reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
-                } else {
-                    output.push("<issue line=\"" + message.line + "\" char=\"" + message.col + "\" severity=\"" + message.type + "\"" +
-                        " reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
-                }
-            });
-            output.push("</file>");
-        }
-
-        return output.join("");
-    }
-});
-/*global CSSLint*/
-CSSLint.addFormatter({
-    //format information
-    id: "junit-xml",
-    name: "JUNIT XML format",
-
-    /**
-     * Return opening root XML tag.
-     * @return {String} to prepend before all results
-     */
-    startFormat: function(){
-        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><testsuites>";
-    },
-
-    /**
-     * Return closing root XML tag.
-     * @return {String} to append after all results
-     */
-    endFormat: function() {
-        return "</testsuites>";
-    },
-
-    /**
-     * Given CSS Lint results for a file, return output for this format.
-     * @param results {Object} with error and warning messages
-     * @param filename {String} relative file path
-     * @param options {Object} (UNUSED for now) specifies special handling of output
-     * @return {String} output for results
-     */
-    formatResults: function(results, filename, options) {
-
-        var messages = results.messages,
-            output = [],
-            tests = {
-                'error': 0,
-                'failure': 0
-            };
-
-        /**
-         * Generate a source string for a rule.
-         * JUNIT source strings usually resemble Java class names e.g
-         * net.csslint.SomeRuleName
-         * @param {Object} rule
-         * @return rule source as {String}
-         */
-        var generateSource = function(rule) {
-            if (!rule || !('name' in rule)) {
-                return "";
-            }
-            return 'net.csslint.' + rule.name.replace(/\s/g,'');
-        };
-
-        /**
-         * Replace special characters before write to output.
-         *
-         * Rules:
-         *  - single quotes is the escape sequence for double-quotes
-         *  - &lt; is the escape sequence for <
-         *  - &gt; is the escape sequence for >
-         *
-         * @param {String} message to escape
-         * @return escaped message as {String}
-         */
-        var escapeSpecialCharacters = function(str) {
-
-            if (!str || str.constructor !== String) {
-                return "";
-            }
-
-            return str.replace(/\"/g, "'").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-        };
-
-        if (messages.length > 0) {
-
-            messages.forEach(function (message, i) {
-
-                // since junit has no warning class
-                // all issues as errors
-                var type = message.type === 'warning' ? 'error' : message.type;
-
-                //ignore rollups for now
-                if (!message.rollup) {
-
-                    // build the test case seperately, once joined
-                    // we'll add it to a custom array filtered by type
-                    output.push("<testcase time=\"0\" name=\"" + generateSource(message.rule) + "\">");
-                    output.push("<" + type + " message=\"" + escapeSpecialCharacters(message.message) + "\"><![CDATA[" + message.line + ':' + message.col + ':' + escapeSpecialCharacters(message.evidence)  + "]]></" + type + ">");
-                    output.push("</testcase>");
-
-                    tests[type] += 1;
-
-                }
-
-            });
-
-            output.unshift("<testsuite time=\"0\" tests=\"" + messages.length + "\" skipped=\"0\" errors=\"" + tests.error + "\" failures=\"" + tests.failure + "\" package=\"net.csslint\" name=\"" + filename + "\">");
-            output.push("</testsuite>");
-
-        }
-
-        return output.join("");
-
-    }
-});
-/*global CSSLint*/
-CSSLint.addFormatter({
-    //format information
-    id: "lint-xml",
-    name: "Lint XML format",
-
-    /**
-     * Return opening root XML tag.
-     * @return {String} to prepend before all results
-     */
-    startFormat: function(){
-        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><lint>";
-    },
-
-    /**
-     * Return closing root XML tag.
-     * @return {String} to append after all results
-     */
-    endFormat: function(){
-        return "</lint>";
-    },
-
-    /**
-     * Given CSS Lint results for a file, return output for this format.
-     * @param results {Object} with error and warning messages
-     * @param filename {String} relative file path
-     * @param options {Object} (UNUSED for now) specifies special handling of output
-     * @return {String} output for results
-     */
-    formatResults: function(results, filename, options) {
-        var messages = results.messages,
-            output = [];
-
-        /**
-         * Replace special characters before write to output.
-         *
-         * Rules:
-         *  - single quotes is the escape sequence for double-quotes
-         *  - &amp; is the escape sequence for &
-         *  - &lt; is the escape sequence for <
-         *  - &gt; is the escape sequence for >
-         *
-         * @param {String} message to escape
-         * @return escaped message as {String}
-         */
-        var escapeSpecialCharacters = function(str) {
-            if (!str || str.constructor !== String) {
-                return "";
-            }
-            return str.replace(/\"/g, "'").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        };
-
-        if (messages.length > 0) {
-
-            output.push("<file name=\""+filename+"\">");
-            CSSLint.Util.forEach(messages, function (message, i) {
-                if (message.rollup) {
-                    output.push("<issue severity=\"" + message.type + "\" reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
-                } else {
-                    output.push("<issue line=\"" + message.line + "\" char=\"" + message.col + "\" severity=\"" + message.type + "\"" +
-                        " reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
-                }
-            });
-            output.push("</file>");
-        }
-
-        return output.join("");
-    }
-});
-/*global CSSLint*/
-CSSLint.addFormatter({
-    //format information
-    id: "text",
-    name: "Plain Text",
-
-    /**
-     * Return content to be printed before all file results.
-     * @return {String} to prepend before all results
-     */
-    startFormat: function() {
-        return "";
-    },
-
-    /**
-     * Return content to be printed after all file results.
-     * @return {String} to append after all results
-     */
-    endFormat: function() {
-        return "";
-    },
-
-    /**
-     * Given CSS Lint results for a file, return output for this format.
-     * @param results {Object} with error and warning messages
-     * @param filename {String} relative file path
-     * @param options {Object} (Optional) specifies special handling of output
-     * @return {String} output for results
-     */
-    formatResults: function(results, filename, options) {
-        var messages = results.messages,
-            output = "";
-        options = options || {};
-
-        if (messages.length === 0) {
-            return options.quiet ? "" : "\n\ncsslint: No errors in " + filename + ".";
-        }
-
-        output = "\n\ncsslint: There are " + messages.length  +  " problems in " + filename + ".";
-        var pos = filename.lastIndexOf("/"),
-            shortFilename = filename;
-
-        if (pos === -1){
-            pos = filename.lastIndexOf("\\");
-        }
-        if (pos > -1){
-            shortFilename = filename.substring(pos+1);
-        }
-
-        CSSLint.Util.forEach(messages, function (message, i) {
-            output = output + "\n\n" + shortFilename;
-            if (message.rollup) {
-                output += "\n" + (i+1) + ": " + message.type;
-                output += "\n" + message.message;
-            } else {
-                output += "\n" + (i+1) + ": " + message.type + " at line " + message.line + ", col " + message.col;
-                output += "\n" + message.message;
-                output += "\n" + message.evidence;
-            }
-        });
-
-        return output;
-    }
-});
-return CSSLint;
-})();
 /*!
  * JSHint, by JSHint Community.
  *
@@ -28895,1327 +19927,12 @@ loop:   for (;;) {
 if (typeof exports === 'object' && exports)
     exports.JSHINT = JSHINT;
 
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
+/**!
 
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-  var GUTTER_ID = "CodeMirror-lint-markers";
+ @license
+ handlebars v4.0.11
 
-  function showTooltip(e, content) {
-    var tt = document.createElement("div");
-    tt.className = "CodeMirror-lint-tooltip";
-    tt.appendChild(content.cloneNode(true));
-    document.body.appendChild(tt);
-
-    function position(e) {
-      if (!tt.parentNode) return CodeMirror.off(document, "mousemove", position);
-      tt.style.top = Math.max(0, e.clientY - tt.offsetHeight - 5) + "px";
-      tt.style.left = (e.clientX + 5) + "px";
-    }
-    CodeMirror.on(document, "mousemove", position);
-    position(e);
-    if (tt.style.opacity != null) tt.style.opacity = 1;
-    return tt;
-  }
-  function rm(elt) {
-    if (elt.parentNode) elt.parentNode.removeChild(elt);
-  }
-  function hideTooltip(tt) {
-    if (!tt.parentNode) return;
-    if (tt.style.opacity == null) rm(tt);
-    tt.style.opacity = 0;
-    setTimeout(function() { rm(tt); }, 600);
-  }
-
-  function showTooltipFor(e, content, node) {
-    var tooltip = showTooltip(e, content);
-    function hide() {
-      CodeMirror.off(node, "mouseout", hide);
-      if (tooltip) { hideTooltip(tooltip); tooltip = null; }
-    }
-    var poll = setInterval(function() {
-      if (tooltip) for (var n = node;; n = n.parentNode) {
-        if (n && n.nodeType == 11) n = n.host;
-        if (n == document.body) return;
-        if (!n) { hide(); break; }
-      }
-      if (!tooltip) return clearInterval(poll);
-    }, 400);
-    CodeMirror.on(node, "mouseout", hide);
-  }
-
-  function LintState(cm, options, hasGutter) {
-    this.marked = [];
-    this.options = options;
-    this.timeout = null;
-    this.hasGutter = hasGutter;
-    this.onMouseOver = function(e) { onMouseOver(cm, e); };
-    this.waitingFor = 0
-  }
-
-  function parseOptions(_cm, options) {
-    if (options instanceof Function) return {getAnnotations: options};
-    if (!options || options === true) options = {};
-    return options;
-  }
-
-  function clearMarks(cm) {
-    var state = cm.state.lint;
-    if (state.hasGutter) cm.clearGutter(GUTTER_ID);
-    for (var i = 0; i < state.marked.length; ++i)
-      state.marked[i].clear();
-    state.marked.length = 0;
-  }
-
-  function makeMarker(labels, severity, multiple, tooltips) {
-    var marker = document.createElement("div"), inner = marker;
-    marker.className = "CodeMirror-lint-marker-" + severity;
-    if (multiple) {
-      inner = marker.appendChild(document.createElement("div"));
-      inner.className = "CodeMirror-lint-marker-multiple";
-    }
-
-    if (tooltips != false) CodeMirror.on(inner, "mouseover", function(e) {
-      showTooltipFor(e, labels, inner);
-    });
-
-    return marker;
-  }
-
-  function getMaxSeverity(a, b) {
-    if (a == "error") return a;
-    else return b;
-  }
-
-  function groupByLine(annotations) {
-    var lines = [];
-    for (var i = 0; i < annotations.length; ++i) {
-      var ann = annotations[i], line = ann.from.line;
-      (lines[line] || (lines[line] = [])).push(ann);
-    }
-    return lines;
-  }
-
-  function annotationTooltip(ann) {
-    var severity = ann.severity;
-    if (!severity) severity = "error";
-    var tip = document.createElement("div");
-    tip.className = "CodeMirror-lint-message-" + severity;
-    tip.appendChild(document.createTextNode(ann.message));
-    return tip;
-  }
-
-  function lintAsync(cm, getAnnotations, passOptions) {
-    var state = cm.state.lint
-    var id = ++state.waitingFor
-    function abort() {
-      id = -1
-      cm.off("change", abort)
-    }
-    cm.on("change", abort)
-    getAnnotations(cm.getValue(), function(annotations, arg2) {
-      cm.off("change", abort)
-      if (state.waitingFor != id) return
-      if (arg2 && annotations instanceof CodeMirror) annotations = arg2
-      updateLinting(cm, annotations)
-    }, passOptions, cm);
-  }
-
-  function startLinting(cm) {
-    var state = cm.state.lint, options = state.options;
-    var passOptions = options.options || options; // Support deprecated passing of `options` property in options
-    var getAnnotations = options.getAnnotations || cm.getHelper(CodeMirror.Pos(0, 0), "lint");
-    if (!getAnnotations) return;
-    if (options.async || getAnnotations.async) {
-      lintAsync(cm, getAnnotations, passOptions)
-    } else {
-      var annotations = getAnnotations(cm.getValue(), passOptions, cm);
-      if (!annotations) return;
-      if (annotations.then) annotations.then(function(issues) {
-        updateLinting(cm, issues);
-      });
-      else updateLinting(cm, annotations);
-    }
-  }
-
-  function updateLinting(cm, annotationsNotSorted) {
-    clearMarks(cm);
-    var state = cm.state.lint, options = state.options;
-
-    var annotations = groupByLine(annotationsNotSorted);
-
-    for (var line = 0; line < annotations.length; ++line) {
-      var anns = annotations[line];
-      if (!anns) continue;
-
-      var maxSeverity = null;
-      var tipLabel = state.hasGutter && document.createDocumentFragment();
-
-      for (var i = 0; i < anns.length; ++i) {
-        var ann = anns[i];
-        var severity = ann.severity;
-        if (!severity) severity = "error";
-        maxSeverity = getMaxSeverity(maxSeverity, severity);
-
-        if (options.formatAnnotation) ann = options.formatAnnotation(ann);
-        if (state.hasGutter) tipLabel.appendChild(annotationTooltip(ann));
-
-        if (ann.to) state.marked.push(cm.markText(ann.from, ann.to, {
-          className: "CodeMirror-lint-mark-" + severity,
-          __annotation: ann
-        }));
-      }
-
-      if (state.hasGutter)
-        cm.setGutterMarker(line, GUTTER_ID, makeMarker(tipLabel, maxSeverity, anns.length > 1,
-                                                       state.options.tooltips));
-    }
-    if (options.onUpdateLinting) options.onUpdateLinting(annotationsNotSorted, annotations, cm);
-  }
-
-  function onChange(cm) {
-    var state = cm.state.lint;
-    if (!state) return;
-    clearTimeout(state.timeout);
-    state.timeout = setTimeout(function(){startLinting(cm);}, state.options.delay || 500);
-  }
-
-  function popupTooltips(annotations, e) {
-    var target = e.target || e.srcElement;
-    var tooltip = document.createDocumentFragment();
-    for (var i = 0; i < annotations.length; i++) {
-      var ann = annotations[i];
-      tooltip.appendChild(annotationTooltip(ann));
-    }
-    showTooltipFor(e, tooltip, target);
-  }
-
-  function onMouseOver(cm, e) {
-    var target = e.target || e.srcElement;
-    if (!/\bCodeMirror-lint-mark-/.test(target.className)) return;
-    var box = target.getBoundingClientRect(), x = (box.left + box.right) / 2, y = (box.top + box.bottom) / 2;
-    var spans = cm.findMarksAt(cm.coordsChar({left: x, top: y}, "client"));
-
-    var annotations = [];
-    for (var i = 0; i < spans.length; ++i) {
-      var ann = spans[i].__annotation;
-      if (ann) annotations.push(ann);
-    }
-    if (annotations.length) popupTooltips(annotations, e);
-  }
-
-  CodeMirror.defineOption("lint", false, function(cm, val, old) {
-    if (old && old != CodeMirror.Init) {
-      clearMarks(cm);
-      if (cm.state.lint.options.lintOnChange !== false)
-        cm.off("change", onChange);
-      CodeMirror.off(cm.getWrapperElement(), "mouseover", cm.state.lint.onMouseOver);
-      clearTimeout(cm.state.lint.timeout);
-      delete cm.state.lint;
-    }
-
-    if (val) {
-      var gutters = cm.getOption("gutters"), hasLintGutter = false;
-      for (var i = 0; i < gutters.length; ++i) if (gutters[i] == GUTTER_ID) hasLintGutter = true;
-      var state = cm.state.lint = new LintState(cm, parseOptions(cm, val), hasLintGutter);
-      if (state.options.lintOnChange !== false)
-        cm.on("change", onChange);
-      if (state.options.tooltips != false && state.options.tooltips != "gutter")
-        CodeMirror.on(cm.getWrapperElement(), "mouseover", state.onMouseOver);
-
-      startLinting(cm);
-    }
-  });
-
-  CodeMirror.defineExtension("performLint", function() {
-    if (this.state.lint) startLinting(this);
-  });
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-// Depends on htmlhint.js from http://htmlhint.com/js/htmlhint.js
-
-// declare global: HTMLHint
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("htmlhint"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "htmlhint"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  var defaultRules = {
-    "tagname-lowercase": true,
-    "attr-lowercase": true,
-    "attr-value-double-quotes": true,
-    "doctype-first": false,
-    "tag-pair": true,
-    "spec-char-escape": true,
-    "id-unique": true,
-    "src-not-empty": true,
-    "attr-no-duplication": true
-  };
-
-  CodeMirror.registerHelper("lint", "html", function(text, options) {
-    var found = [];
-    if (!window.HTMLHint) return found;
-    var messages = HTMLHint.verify(text, options && options.rules || defaultRules);
-    for (var i = 0; i < messages.length; i++) {
-      var message = messages[i];
-      var startLine = message.line - 1, endLine = message.line - 1, startCol = message.col - 1, endCol = message.col;
-      found.push({
-        from: CodeMirror.Pos(startLine, startCol),
-        to: CodeMirror.Pos(endLine, endCol),
-        message: message.message,
-        severity : message.type
-      });
-    }
-    return found;
-  });
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-// Depends on csslint.js from https://github.com/stubbornella/csslint
-
-// declare global: CSSLint
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-"use strict";
-
-CodeMirror.registerHelper("lint", "css", function(text) {
-  var found = [];
-  if (!window.CSSLint) return found;
-  var results = CSSLint.verify(text), messages = results.messages, message = null;
-  for ( var i = 0; i < messages.length; i++) {
-    message = messages[i];
-    var startLine = message.line -1, endLine = message.line -1, startCol = message.col -1, endCol = message.col;
-    found.push({
-      from: CodeMirror.Pos(startLine, startCol),
-      to: CodeMirror.Pos(endLine, endCol),
-      message: message.message,
-      severity : message.type
-    });
-  }
-  return found;
-});
-
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-  // declare global: JSHINT
-
-  var bogus = [ "Dangerous comment" ];
-
-  var warnings = [ [ "Expected '{'",
-                     "Statement body should be inside '{ }' braces." ] ];
-
-  var errors = [ "Missing semicolon", "Extra comma", "Missing property name",
-                 "Unmatched ", " and instead saw", " is not defined",
-                 "Unclosed string", "Stopping, unable to continue" ];
-
-  function validator(text, options) {
-    if (!window.JSHINT) return [];
-    JSHINT(text, options, options.globals);
-    var errors = JSHINT.data().errors, result = [];
-    if (errors) parseErrors(errors, result);
-    return result;
-  }
-
-  CodeMirror.registerHelper("lint", "javascript", validator);
-
-  function cleanup(error) {
-    // All problems are warnings by default
-    fixWith(error, warnings, "warning", true);
-    fixWith(error, errors, "error");
-
-    return isBogus(error) ? null : error;
-  }
-
-  function fixWith(error, fixes, severity, force) {
-    var description, fix, find, replace, found;
-
-    description = error.description;
-
-    for ( var i = 0; i < fixes.length; i++) {
-      fix = fixes[i];
-      find = (typeof fix === "string" ? fix : fix[0]);
-      replace = (typeof fix === "string" ? null : fix[1]);
-      found = description.indexOf(find) !== -1;
-
-      if (force || found) {
-        error.severity = severity;
-      }
-      if (found && replace) {
-        error.description = replace;
-      }
-    }
-  }
-
-  function isBogus(error) {
-    var description = error.description;
-    for ( var i = 0; i < bogus.length; i++) {
-      if (description.indexOf(bogus[i]) !== -1) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function parseErrors(errors, output) {
-    for ( var i = 0; i < errors.length; i++) {
-      var error = errors[i];
-      if (error) {
-        var linetabpositions, index;
-
-        linetabpositions = [];
-
-        // This next block is to fix a problem in jshint. Jshint
-        // replaces
-        // all tabs with spaces then performs some checks. The error
-        // positions (character/space) are then reported incorrectly,
-        // not taking the replacement step into account. Here we look
-        // at the evidence line and try to adjust the character position
-        // to the correct value.
-        if (error.evidence) {
-          // Tab positions are computed once per line and cached
-          var tabpositions = linetabpositions[error.line];
-          if (!tabpositions) {
-            var evidence = error.evidence;
-            tabpositions = [];
-            // ugggh phantomjs does not like this
-            // forEachChar(evidence, function(item, index) {
-            Array.prototype.forEach.call(evidence, function(item,
-                                                            index) {
-              if (item === '\t') {
-                // First col is 1 (not 0) to match error
-                // positions
-                tabpositions.push(index + 1);
-              }
-            });
-            linetabpositions[error.line] = tabpositions;
-          }
-          if (tabpositions.length > 0) {
-            var pos = error.character;
-            tabpositions.forEach(function(tabposition) {
-              if (pos > tabposition) pos -= 1;
-            });
-            error.character = pos;
-          }
-        }
-
-        var start = error.character - 1, end = start + 1;
-        if (error.evidence) {
-          index = error.evidence.substring(start).search(/.\b/);
-          if (index > -1) {
-            end += index;
-          }
-        }
-
-        // Convert to format expected by validation service
-        error.description = error.reason;// + "(jshint)";
-        error.start = error.character;
-        error.end = end;
-        error = cleanup(error);
-
-        if (error)
-          output.push({message: error.description,
-                       severity: error.severity,
-                       from: CodeMirror.Pos(error.line - 1, start),
-                       to: CodeMirror.Pos(error.line - 1, end)});
-      }
-    }
-  }
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-// Defines jumpToLine command. Uses dialog.js if present.
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("../dialog/dialog"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "../dialog/dialog"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-  "use strict";
-
-  function dialog(cm, text, shortText, deflt, f) {
-    if (cm.openDialog) cm.openDialog(text, f, {value: deflt, selectValueOnOpen: true});
-    else f(prompt(shortText, deflt));
-  }
-
-  var jumpDialog =
-      'Jump to line: <input type="text" style="width: 10em" class="CodeMirror-search-field"/> <span style="color: #888" class="CodeMirror-search-hint">(Use line:column or scroll% syntax)</span>';
-
-  function interpretLine(cm, string) {
-    var num = Number(string)
-    if (/^[-+]/.test(string)) return cm.getCursor().line + num
-    else return num - 1
-  }
-
-  CodeMirror.commands.jumpToLine = function(cm) {
-    var cur = cm.getCursor();
-    dialog(cm, jumpDialog, "Jump to line:", (cur.line + 1) + ":" + cur.ch, function(posStr) {
-      if (!posStr) return;
-
-      var match;
-      if (match = /^\s*([\+\-]?\d+)\s*\:\s*(\d+)\s*$/.exec(posStr)) {
-        cm.setCursor(interpretLine(cm, match[1]), Number(match[2]))
-      } else if (match = /^\s*([\+\-]?\d+(\.\d+)?)\%\s*/.exec(posStr)) {
-        var line = Math.round(cm.lineCount() * Number(match[1]) / 100);
-        if (/^[-+]/.test(match[1])) line = cur.line + line + 1;
-        cm.setCursor(line - 1, cur.ch);
-      } else if (match = /^\s*\:?\s*([\+\-]?\d+)\s*/.exec(posStr)) {
-        cm.setCursor(interpretLine(cm, match[1]), cur.ch);
-      }
-    });
-  };
-
-  CodeMirror.keyMap["default"]["Alt-G"] = "jumpToLine";
-});
-
-// CodeMirror, copyright (c) by Marijn Haverbeke and others
-// Distributed under an MIT license: http://codemirror.net/LICENSE
-
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"), require("../xml/xml"), require("../meta"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "../xml/xml", "../meta"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})(function(CodeMirror) {
-"use strict";
-
-CodeMirror.defineMode("markdown", function(cmCfg, modeCfg) {
-
-  var htmlMode = CodeMirror.getMode(cmCfg, "text/html");
-  var htmlModeMissing = htmlMode.name == "null"
-
-  function getMode(name) {
-    if (CodeMirror.findModeByName) {
-      var found = CodeMirror.findModeByName(name);
-      if (found) name = found.mime || found.mimes[0];
-    }
-    var mode = CodeMirror.getMode(cmCfg, name);
-    return mode.name == "null" ? null : mode;
-  }
-
-  // Should characters that affect highlighting be highlighted separate?
-  // Does not include characters that will be output (such as `1.` and `-` for lists)
-  if (modeCfg.highlightFormatting === undefined)
-    modeCfg.highlightFormatting = false;
-
-  // Maximum number of nested blockquotes. Set to 0 for infinite nesting.
-  // Excess `>` will emit `error` token.
-  if (modeCfg.maxBlockquoteDepth === undefined)
-    modeCfg.maxBlockquoteDepth = 0;
-
-  // Use `fencedCodeBlocks` to configure fenced code blocks. false to
-  // disable, string to specify a precise regexp that the fence should
-  // match, and true to allow three or more backticks or tildes (as
-  // per CommonMark).
-
-  // Turn on task lists? ("- [ ] " and "- [x] ")
-  if (modeCfg.taskLists === undefined) modeCfg.taskLists = false;
-
-  // Turn on strikethrough syntax
-  if (modeCfg.strikethrough === undefined)
-    modeCfg.strikethrough = false;
-
-  // Allow token types to be overridden by user-provided token types.
-  if (modeCfg.tokenTypeOverrides === undefined)
-    modeCfg.tokenTypeOverrides = {};
-
-  var tokenTypes = {
-    header: "header",
-    code: "comment",
-    quote: "quote",
-    list1: "variable-2",
-    list2: "variable-3",
-    list3: "keyword",
-    hr: "hr",
-    image: "image",
-    imageAltText: "image-alt-text",
-    imageMarker: "image-marker",
-    formatting: "formatting",
-    linkInline: "link",
-    linkEmail: "link",
-    linkText: "link",
-    linkHref: "string",
-    em: "em",
-    strong: "strong",
-    strikethrough: "strikethrough"
-  };
-
-  for (var tokenType in tokenTypes) {
-    if (tokenTypes.hasOwnProperty(tokenType) && modeCfg.tokenTypeOverrides[tokenType]) {
-      tokenTypes[tokenType] = modeCfg.tokenTypeOverrides[tokenType];
-    }
-  }
-
-  var hrRE = /^([*\-_])(?:\s*\1){2,}\s*$/
-  ,   listRE = /^(?:[*\-+]|^[0-9]+([.)]))\s+/
-  ,   taskListRE = /^\[(x| )\](?=\s)/ // Must follow listRE
-  ,   atxHeaderRE = modeCfg.allowAtxHeaderWithoutSpace ? /^(#+)/ : /^(#+)(?: |$)/
-  ,   setextHeaderRE = /^ *(?:\={1,}|-{1,})\s*$/
-  ,   textRE = /^[^#!\[\]*_\\<>` "'(~]+/
-  ,   fencedCodeRE = new RegExp("^(" + (modeCfg.fencedCodeBlocks === true ? "~~~+|```+" : modeCfg.fencedCodeBlocks) +
-                                ")[ \\t]*([\\w+#\-]*)")
-  ,   punctuation = /[!\"#$%&\'()*+,\-\.\/:;<=>?@\[\\\]^_`{|}~—]/
-
-  function switchInline(stream, state, f) {
-    state.f = state.inline = f;
-    return f(stream, state);
-  }
-
-  function switchBlock(stream, state, f) {
-    state.f = state.block = f;
-    return f(stream, state);
-  }
-
-  function lineIsEmpty(line) {
-    return !line || !/\S/.test(line.string)
-  }
-
-  // Blocks
-
-  function blankLine(state) {
-    // Reset linkTitle state
-    state.linkTitle = false;
-    // Reset EM state
-    state.em = false;
-    // Reset STRONG state
-    state.strong = false;
-    // Reset strikethrough state
-    state.strikethrough = false;
-    // Reset state.quote
-    state.quote = 0;
-    // Reset state.indentedCode
-    state.indentedCode = false;
-    if (state.f == htmlBlock) {
-      state.f = inlineNormal;
-      state.block = blockNormal;
-    }
-    // Reset state.trailingSpace
-    state.trailingSpace = 0;
-    state.trailingSpaceNewLine = false;
-    // Mark this line as blank
-    state.prevLine = state.thisLine
-    state.thisLine = null
-    return null;
-  }
-
-  function blockNormal(stream, state) {
-    var sol = stream.sol();
-
-    var prevLineIsList = state.list !== false,
-        prevLineIsIndentedCode = state.indentedCode;
-
-    state.indentedCode = false;
-
-    if (prevLineIsList) {
-      if (state.indentationDiff >= 0) { // Continued list
-        if (state.indentationDiff < 4) { // Only adjust indentation if *not* a code block
-          state.indentation -= state.indentationDiff;
-        }
-        state.list = null;
-      } else if (state.indentation > 0) {
-        state.list = null;
-      } else { // No longer a list
-        state.list = false;
-      }
-    }
-
-    var match = null;
-    if (state.indentationDiff >= 4 && (prevLineIsIndentedCode || lineIsEmpty(state.prevLine))) {
-      stream.skipToEnd();
-      state.indentation -= 4;
-      state.indentedCode = true;
-      return tokenTypes.code;
-    } else if (stream.eatSpace()) {
-      return null;
-    } else if ((match = stream.match(atxHeaderRE)) && match[1].length <= 6) {
-      state.header = match[1].length;
-      if (modeCfg.highlightFormatting) state.formatting = "header";
-      state.f = state.inline;
-      return getType(state);
-    } else if (!lineIsEmpty(state.prevLine) && !state.quote && !prevLineIsList &&
-               !prevLineIsIndentedCode && (match = stream.match(setextHeaderRE))) {
-      state.header = match[0].charAt(0) == '=' ? 1 : 2;
-      if (modeCfg.highlightFormatting) state.formatting = "header";
-      state.f = state.inline;
-      return getType(state);
-    } else if (stream.eat('>')) {
-      state.quote = sol ? 1 : state.quote + 1;
-      if (modeCfg.highlightFormatting) state.formatting = "quote";
-      stream.eatSpace();
-      return getType(state);
-    } else if (stream.peek() === '[') {
-      return switchInline(stream, state, footnoteLink);
-    } else if (stream.match(hrRE, true)) {
-      state.hr = true;
-      return tokenTypes.hr;
-    } else if (match = stream.match(listRE)) {
-      var listType = match[1] ? "ol" : "ul";
-      state.indentation = stream.column() + stream.current().length;
-      state.list = true;
-
-      // While this list item's marker's indentation
-      // is less than the deepest list item's content's indentation,
-      // pop the deepest list item indentation off the stack.
-      while (state.listStack && stream.column() < state.listStack[state.listStack.length - 1]) {
-        state.listStack.pop();
-      }
-
-      // Add this list item's content's indentation to the stack
-      state.listStack.push(state.indentation);
-
-      if (modeCfg.taskLists && stream.match(taskListRE, false)) {
-        state.taskList = true;
-      }
-      state.f = state.inline;
-      if (modeCfg.highlightFormatting) state.formatting = ["list", "list-" + listType];
-      return getType(state);
-    } else if (modeCfg.fencedCodeBlocks && (match = stream.match(fencedCodeRE, true))) {
-      state.fencedChars = match[1]
-      // try switching mode
-      state.localMode = getMode(match[2]);
-      if (state.localMode) state.localState = CodeMirror.startState(state.localMode);
-      state.f = state.block = local;
-      if (modeCfg.highlightFormatting) state.formatting = "code-block";
-      state.code = -1
-      return getType(state);
-    }
-
-    return switchInline(stream, state, state.inline);
-  }
-
-  function htmlBlock(stream, state) {
-    var style = htmlMode.token(stream, state.htmlState);
-    if (!htmlModeMissing) {
-      var inner = CodeMirror.innerMode(htmlMode, state.htmlState)
-      if ((inner.mode.name == "xml" && inner.state.tagStart === null &&
-           (!inner.state.context && inner.state.tokenize.isInText)) ||
-          (state.md_inside && stream.current().indexOf(">") > -1)) {
-        state.f = inlineNormal;
-        state.block = blockNormal;
-        state.htmlState = null;
-      }
-    }
-    return style;
-  }
-
-  function local(stream, state) {
-    if (state.fencedChars && stream.match(state.fencedChars)) {
-      if (modeCfg.highlightFormatting) state.formatting = "code-block";
-      var returnType = getType(state)
-      state.localMode = state.localState = null;
-      state.block = blockNormal;
-      state.f = inlineNormal;
-      state.fencedChars = null;
-      state.code = 0
-      return returnType;
-    } else if (state.fencedChars && stream.skipTo(state.fencedChars)) {
-      return "comment"
-    } else if (state.localMode) {
-      return state.localMode.token(stream, state.localState);
-    } else {
-      stream.skipToEnd();
-      return tokenTypes.code;
-    }
-  }
-
-  // Inline
-  function getType(state) {
-    var styles = [];
-
-    if (state.formatting) {
-      styles.push(tokenTypes.formatting);
-
-      if (typeof state.formatting === "string") state.formatting = [state.formatting];
-
-      for (var i = 0; i < state.formatting.length; i++) {
-        styles.push(tokenTypes.formatting + "-" + state.formatting[i]);
-
-        if (state.formatting[i] === "header") {
-          styles.push(tokenTypes.formatting + "-" + state.formatting[i] + "-" + state.header);
-        }
-
-        // Add `formatting-quote` and `formatting-quote-#` for blockquotes
-        // Add `error` instead if the maximum blockquote nesting depth is passed
-        if (state.formatting[i] === "quote") {
-          if (!modeCfg.maxBlockquoteDepth || modeCfg.maxBlockquoteDepth >= state.quote) {
-            styles.push(tokenTypes.formatting + "-" + state.formatting[i] + "-" + state.quote);
-          } else {
-            styles.push("error");
-          }
-        }
-      }
-    }
-
-    if (state.taskOpen) {
-      styles.push("meta");
-      return styles.length ? styles.join(' ') : null;
-    }
-    if (state.taskClosed) {
-      styles.push("property");
-      return styles.length ? styles.join(' ') : null;
-    }
-
-    if (state.linkHref) {
-      styles.push(tokenTypes.linkHref, "url");
-    } else { // Only apply inline styles to non-url text
-      if (state.strong) { styles.push(tokenTypes.strong); }
-      if (state.em) { styles.push(tokenTypes.em); }
-      if (state.strikethrough) { styles.push(tokenTypes.strikethrough); }
-      if (state.linkText) { styles.push(tokenTypes.linkText); }
-      if (state.code) { styles.push(tokenTypes.code); }
-      if (state.image) { styles.push(tokenTypes.image); }
-      if (state.imageAltText) { styles.push(tokenTypes.imageAltText, "link"); }
-      if (state.imageMarker) { styles.push(tokenTypes.imageMarker); }
-    }
-
-    if (state.header) { styles.push(tokenTypes.header, tokenTypes.header + "-" + state.header); }
-
-    if (state.quote) {
-      styles.push(tokenTypes.quote);
-
-      // Add `quote-#` where the maximum for `#` is modeCfg.maxBlockquoteDepth
-      if (!modeCfg.maxBlockquoteDepth || modeCfg.maxBlockquoteDepth >= state.quote) {
-        styles.push(tokenTypes.quote + "-" + state.quote);
-      } else {
-        styles.push(tokenTypes.quote + "-" + modeCfg.maxBlockquoteDepth);
-      }
-    }
-
-    if (state.list !== false) {
-      var listMod = (state.listStack.length - 1) % 3;
-      if (!listMod) {
-        styles.push(tokenTypes.list1);
-      } else if (listMod === 1) {
-        styles.push(tokenTypes.list2);
-      } else {
-        styles.push(tokenTypes.list3);
-      }
-    }
-
-    if (state.trailingSpaceNewLine) {
-      styles.push("trailing-space-new-line");
-    } else if (state.trailingSpace) {
-      styles.push("trailing-space-" + (state.trailingSpace % 2 ? "a" : "b"));
-    }
-
-    return styles.length ? styles.join(' ') : null;
-  }
-
-  function handleText(stream, state) {
-    if (stream.match(textRE, true)) {
-      return getType(state);
-    }
-    return undefined;
-  }
-
-  function inlineNormal(stream, state) {
-    var style = state.text(stream, state);
-    if (typeof style !== 'undefined')
-      return style;
-
-    if (state.list) { // List marker (*, +, -, 1., etc)
-      state.list = null;
-      return getType(state);
-    }
-
-    if (state.taskList) {
-      var taskOpen = stream.match(taskListRE, true)[1] !== "x";
-      if (taskOpen) state.taskOpen = true;
-      else state.taskClosed = true;
-      if (modeCfg.highlightFormatting) state.formatting = "task";
-      state.taskList = false;
-      return getType(state);
-    }
-
-    state.taskOpen = false;
-    state.taskClosed = false;
-
-    if (state.header && stream.match(/^#+$/, true)) {
-      if (modeCfg.highlightFormatting) state.formatting = "header";
-      return getType(state);
-    }
-
-    var ch = stream.next();
-
-    // Matches link titles present on next line
-    if (state.linkTitle) {
-      state.linkTitle = false;
-      var matchCh = ch;
-      if (ch === '(') {
-        matchCh = ')';
-      }
-      matchCh = (matchCh+'').replace(/([.?*+^\[\]\\(){}|-])/g, "\\$1");
-      var regex = '^\\s*(?:[^' + matchCh + '\\\\]+|\\\\\\\\|\\\\.)' + matchCh;
-      if (stream.match(new RegExp(regex), true)) {
-        return tokenTypes.linkHref;
-      }
-    }
-
-    // If this block is changed, it may need to be updated in GFM mode
-    if (ch === '`') {
-      var previousFormatting = state.formatting;
-      if (modeCfg.highlightFormatting) state.formatting = "code";
-      stream.eatWhile('`');
-      var count = stream.current().length
-      if (state.code == 0) {
-        state.code = count
-        return getType(state)
-      } else if (count == state.code) { // Must be exact
-        var t = getType(state)
-        state.code = 0
-        return t
-      } else {
-        state.formatting = previousFormatting
-        return getType(state)
-      }
-    } else if (state.code) {
-      return getType(state);
-    }
-
-    if (ch === '\\') {
-      stream.next();
-      if (modeCfg.highlightFormatting) {
-        var type = getType(state);
-        var formattingEscape = tokenTypes.formatting + "-escape";
-        return type ? type + " " + formattingEscape : formattingEscape;
-      }
-    }
-
-    if (ch === '!' && stream.match(/\[[^\]]*\] ?(?:\(|\[)/, false)) {
-      state.imageMarker = true;
-      state.image = true;
-      if (modeCfg.highlightFormatting) state.formatting = "image";
-      return getType(state);
-    }
-
-    if (ch === '[' && state.imageMarker && stream.match(/[^\]]*\](\(.*?\)| ?\[.*?\])/, false)) {
-      state.imageMarker = false;
-      state.imageAltText = true
-      if (modeCfg.highlightFormatting) state.formatting = "image";
-      return getType(state);
-    }
-
-    if (ch === ']' && state.imageAltText) {
-      if (modeCfg.highlightFormatting) state.formatting = "image";
-      var type = getType(state);
-      state.imageAltText = false;
-      state.image = false;
-      state.inline = state.f = linkHref;
-      return type;
-    }
-
-    if (ch === '[' && !state.image) {
-      state.linkText = true;
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      return getType(state);
-    }
-
-    if (ch === ']' && state.linkText) {
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      var type = getType(state);
-      state.linkText = false;
-      state.inline = state.f = stream.match(/\(.*?\)| ?\[.*?\]/, false) ? linkHref : inlineNormal
-      return type;
-    }
-
-    if (ch === '<' && stream.match(/^(https?|ftps?):\/\/(?:[^\\>]|\\.)+>/, false)) {
-      state.f = state.inline = linkInline;
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      var type = getType(state);
-      if (type){
-        type += " ";
-      } else {
-        type = "";
-      }
-      return type + tokenTypes.linkInline;
-    }
-
-    if (ch === '<' && stream.match(/^[^> \\]+@(?:[^\\>]|\\.)+>/, false)) {
-      state.f = state.inline = linkInline;
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      var type = getType(state);
-      if (type){
-        type += " ";
-      } else {
-        type = "";
-      }
-      return type + tokenTypes.linkEmail;
-    }
-
-    if (ch === '<' && stream.match(/^(!--|[a-z]+(?:\s+[a-z_:.\-]+(?:\s*=\s*[^ >]+)?)*\s*>)/i, false)) {
-      var end = stream.string.indexOf(">", stream.pos);
-      if (end != -1) {
-        var atts = stream.string.substring(stream.start, end);
-        if (/markdown\s*=\s*('|"){0,1}1('|"){0,1}/.test(atts)) state.md_inside = true;
-      }
-      stream.backUp(1);
-      state.htmlState = CodeMirror.startState(htmlMode);
-      return switchBlock(stream, state, htmlBlock);
-    }
-
-    if (ch === '<' && stream.match(/^\/\w*?>/)) {
-      state.md_inside = false;
-      return "tag";
-    } else if (ch === "*" || ch === "_") {
-      var len = 1, before = stream.pos == 1 ? " " : stream.string.charAt(stream.pos - 2)
-      while (len < 3 && stream.eat(ch)) len++
-      var after = stream.peek() || " "
-      // See http://spec.commonmark.org/0.27/#emphasis-and-strong-emphasis
-      var leftFlanking = !/\s/.test(after) && (!punctuation.test(after) || /\s/.test(before) || punctuation.test(before))
-      var rightFlanking = !/\s/.test(before) && (!punctuation.test(before) || /\s/.test(after) || punctuation.test(after))
-      var setEm = null, setStrong = null
-      if (len % 2) { // Em
-        if (!state.em && leftFlanking && (ch === "*" || !rightFlanking || punctuation.test(before)))
-          setEm = true
-        else if (state.em == ch && rightFlanking && (ch === "*" || !leftFlanking || punctuation.test(after)))
-          setEm = false
-      }
-      if (len > 1) { // Strong
-        if (!state.strong && leftFlanking && (ch === "*" || !rightFlanking || punctuation.test(before)))
-          setStrong = true
-        else if (state.strong == ch && rightFlanking && (ch === "*" || !leftFlanking || punctuation.test(after)))
-          setStrong = false
-      }
-      if (setStrong != null || setEm != null) {
-        if (modeCfg.highlightFormatting) state.formatting = setEm == null ? "strong" : setStrong == null ? "em" : "strong em"
-        if (setEm === true) state.em = ch
-        if (setStrong === true) state.strong = ch
-        var t = getType(state)
-        if (setEm === false) state.em = false
-        if (setStrong === false) state.strong = false
-        return t
-      }
-    } else if (ch === ' ') {
-      if (stream.eat('*') || stream.eat('_')) { // Probably surrounded by spaces
-        if (stream.peek() === ' ') { // Surrounded by spaces, ignore
-          return getType(state);
-        } else { // Not surrounded by spaces, back up pointer
-          stream.backUp(1);
-        }
-      }
-    }
-
-    if (modeCfg.strikethrough) {
-      if (ch === '~' && stream.eatWhile(ch)) {
-        if (state.strikethrough) {// Remove strikethrough
-          if (modeCfg.highlightFormatting) state.formatting = "strikethrough";
-          var t = getType(state);
-          state.strikethrough = false;
-          return t;
-        } else if (stream.match(/^[^\s]/, false)) {// Add strikethrough
-          state.strikethrough = true;
-          if (modeCfg.highlightFormatting) state.formatting = "strikethrough";
-          return getType(state);
-        }
-      } else if (ch === ' ') {
-        if (stream.match(/^~~/, true)) { // Probably surrounded by space
-          if (stream.peek() === ' ') { // Surrounded by spaces, ignore
-            return getType(state);
-          } else { // Not surrounded by spaces, back up pointer
-            stream.backUp(2);
-          }
-        }
-      }
-    }
-
-    if (ch === ' ') {
-      if (stream.match(/ +$/, false)) {
-        state.trailingSpace++;
-      } else if (state.trailingSpace) {
-        state.trailingSpaceNewLine = true;
-      }
-    }
-
-    return getType(state);
-  }
-
-  function linkInline(stream, state) {
-    var ch = stream.next();
-
-    if (ch === ">") {
-      state.f = state.inline = inlineNormal;
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      var type = getType(state);
-      if (type){
-        type += " ";
-      } else {
-        type = "";
-      }
-      return type + tokenTypes.linkInline;
-    }
-
-    stream.match(/^[^>]+/, true);
-
-    return tokenTypes.linkInline;
-  }
-
-  function linkHref(stream, state) {
-    // Check if space, and return NULL if so (to avoid marking the space)
-    if(stream.eatSpace()){
-      return null;
-    }
-    var ch = stream.next();
-    if (ch === '(' || ch === '[') {
-      state.f = state.inline = getLinkHrefInside(ch === "(" ? ")" : "]");
-      if (modeCfg.highlightFormatting) state.formatting = "link-string";
-      state.linkHref = true;
-      return getType(state);
-    }
-    return 'error';
-  }
-
-  var linkRE = {
-    ")": /^(?:[^\\\(\)]|\\.|\((?:[^\\\(\)]|\\.)*\))*?(?=\))/,
-    "]": /^(?:[^\\\[\]]|\\.|\[(?:[^\\\[\]]|\\.)*\])*?(?=\])/
-  }
-
-  function getLinkHrefInside(endChar) {
-    return function(stream, state) {
-      var ch = stream.next();
-
-      if (ch === endChar) {
-        state.f = state.inline = inlineNormal;
-        if (modeCfg.highlightFormatting) state.formatting = "link-string";
-        var returnState = getType(state);
-        state.linkHref = false;
-        return returnState;
-      }
-
-      stream.match(linkRE[endChar])
-      state.linkHref = true;
-      return getType(state);
-    };
-  }
-
-  function footnoteLink(stream, state) {
-    if (stream.match(/^([^\]\\]|\\.)*\]:/, false)) {
-      state.f = footnoteLinkInside;
-      stream.next(); // Consume [
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      state.linkText = true;
-      return getType(state);
-    }
-    return switchInline(stream, state, inlineNormal);
-  }
-
-  function footnoteLinkInside(stream, state) {
-    if (stream.match(/^\]:/, true)) {
-      state.f = state.inline = footnoteUrl;
-      if (modeCfg.highlightFormatting) state.formatting = "link";
-      var returnType = getType(state);
-      state.linkText = false;
-      return returnType;
-    }
-
-    stream.match(/^([^\]\\]|\\.)+/, true);
-
-    return tokenTypes.linkText;
-  }
-
-  function footnoteUrl(stream, state) {
-    // Check if space, and return NULL if so (to avoid marking the space)
-    if(stream.eatSpace()){
-      return null;
-    }
-    // Match URL
-    stream.match(/^[^\s]+/, true);
-    // Check for link title
-    if (stream.peek() === undefined) { // End of line, set flag to check next line
-      state.linkTitle = true;
-    } else { // More content on line, check if link title
-      stream.match(/^(?:\s+(?:"(?:[^"\\]|\\\\|\\.)+"|'(?:[^'\\]|\\\\|\\.)+'|\((?:[^)\\]|\\\\|\\.)+\)))?/, true);
-    }
-    state.f = state.inline = inlineNormal;
-    return tokenTypes.linkHref + " url";
-  }
-
-  var mode = {
-    startState: function() {
-      return {
-        f: blockNormal,
-
-        prevLine: null,
-        thisLine: null,
-
-        block: blockNormal,
-        htmlState: null,
-        indentation: 0,
-
-        inline: inlineNormal,
-        text: handleText,
-
-        formatting: false,
-        linkText: false,
-        linkHref: false,
-        linkTitle: false,
-        code: 0,
-        em: false,
-        strong: false,
-        header: 0,
-        hr: false,
-        taskList: false,
-        list: false,
-        listStack: [],
-        quote: 0,
-        trailingSpace: 0,
-        trailingSpaceNewLine: false,
-        strikethrough: false,
-        fencedChars: null
-      };
-    },
-
-    copyState: function(s) {
-      return {
-        f: s.f,
-
-        prevLine: s.prevLine,
-        thisLine: s.thisLine,
-
-        block: s.block,
-        htmlState: s.htmlState && CodeMirror.copyState(htmlMode, s.htmlState),
-        indentation: s.indentation,
-
-        localMode: s.localMode,
-        localState: s.localMode ? CodeMirror.copyState(s.localMode, s.localState) : null,
-
-        inline: s.inline,
-        text: s.text,
-        formatting: false,
-        linkText: s.linkText,
-        linkTitle: s.linkTitle,
-        code: s.code,
-        em: s.em,
-        strong: s.strong,
-        strikethrough: s.strikethrough,
-        header: s.header,
-        hr: s.hr,
-        taskList: s.taskList,
-        list: s.list,
-        listStack: s.listStack.slice(0),
-        quote: s.quote,
-        indentedCode: s.indentedCode,
-        trailingSpace: s.trailingSpace,
-        trailingSpaceNewLine: s.trailingSpaceNewLine,
-        md_inside: s.md_inside,
-        fencedChars: s.fencedChars
-      };
-    },
-
-    token: function(stream, state) {
-
-      // Reset state.formatting
-      state.formatting = false;
-
-      if (stream != state.thisLine) {
-        var forceBlankLine = state.header || state.hr;
-
-        // Reset state.header and state.hr
-        state.header = 0;
-        state.hr = false;
-
-        if (stream.match(/^\s*$/, true) || forceBlankLine) {
-          blankLine(state);
-          if (!forceBlankLine) return null
-          state.prevLine = null
-        }
-
-        state.prevLine = state.thisLine
-        state.thisLine = stream
-
-        // Reset state.taskList
-        state.taskList = false;
-
-        // Reset state.trailingSpace
-        state.trailingSpace = 0;
-        state.trailingSpaceNewLine = false;
-
-        state.f = state.block;
-        if (state.f != htmlBlock) {
-          var indentation = stream.match(/^\s*/, true)[0].replace(/\t/g, '    ').length;
-          state.indentationDiff = Math.min(indentation - state.indentation, 4);
-          state.indentation = state.indentation + state.indentationDiff;
-          if (indentation > 0) return null;
-        }
-      }
-      return state.f(stream, state);
-    },
-
-    innerMode: function(state) {
-      if (state.block == htmlBlock) return {state: state.htmlState, mode: htmlMode};
-      if (state.localState) return {state: state.localState, mode: state.localMode};
-      return {state: state, mode: mode};
-    },
-
-    indent: function(state, textAfter, line) {
-      if (state.block == htmlBlock) return htmlMode.indent(state.htmlState, textAfter, line)
-      if (state.localState) return state.localMode.indent(state.localState, textAfter, line)
-      return CodeMirror.Pass
-    },
-
-    blankLine: blankLine,
-
-    getType: getType,
-
-    closeBrackets: "()[]{}''\"\"``",
-    fold: "markdown"
-  };
-  return mode;
-}, "xml");
-
-CodeMirror.defineMIME("text/x-markdown", "markdown");
-
-});
-
-/*
-The MIT License (MIT)
-
-Copyright (c) 2015 Michael (https://github.com/mikethedj4)
-
-https://raw.githubusercontent.com/mikethedj4/html-lint-for-codemirror/gh-pages/LICENSE
+Copyright (C) 2011-2017 by Yehuda Katz
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30224,61 +19941,65 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
 */
+!function(a,b){"object"==typeof exports&&"object"==typeof module?module.exports=b():"function"==typeof define&&define.amd?define([],b):"object"==typeof exports?exports.Handlebars=b():a.Handlebars=b()}(this,function(){return function(a){function b(d){if(c[d])return c[d].exports;var e=c[d]={exports:{},id:d,loaded:!1};return a[d].call(e.exports,e,e.exports,b),e.loaded=!0,e.exports}var c={};return b.m=a,b.c=c,b.p="",b(0)}([function(a,b,c){"use strict";function d(){var a=r();return a.compile=function(b,c){return k.compile(b,c,a)},a.precompile=function(b,c){return k.precompile(b,c,a)},a.AST=i["default"],a.Compiler=k.Compiler,a.JavaScriptCompiler=m["default"],a.Parser=j.parser,a.parse=j.parse,a}var e=c(1)["default"];b.__esModule=!0;var f=c(2),g=e(f),h=c(35),i=e(h),j=c(36),k=c(41),l=c(42),m=e(l),n=c(39),o=e(n),p=c(34),q=e(p),r=g["default"].create,s=d();s.create=d,q["default"](s),s.Visitor=o["default"],s["default"]=s,b["default"]=s,a.exports=b["default"]},function(a,b){"use strict";b["default"]=function(a){return a&&a.__esModule?a:{"default":a}},b.__esModule=!0},function(a,b,c){"use strict";function d(){var a=new h.HandlebarsEnvironment;return n.extend(a,h),a.SafeString=j["default"],a.Exception=l["default"],a.Utils=n,a.escapeExpression=n.escapeExpression,a.VM=p,a.template=function(b){return p.template(b,a)},a}var e=c(3)["default"],f=c(1)["default"];b.__esModule=!0;var g=c(4),h=e(g),i=c(21),j=f(i),k=c(6),l=f(k),m=c(5),n=e(m),o=c(22),p=e(o),q=c(34),r=f(q),s=d();s.create=d,r["default"](s),s["default"]=s,b["default"]=s,a.exports=b["default"]},function(a,b){"use strict";b["default"]=function(a){if(a&&a.__esModule)return a;var b={};if(null!=a)for(var c in a)Object.prototype.hasOwnProperty.call(a,c)&&(b[c]=a[c]);return b["default"]=a,b},b.__esModule=!0},function(a,b,c){"use strict";function d(a,b,c){this.helpers=a||{},this.partials=b||{},this.decorators=c||{},i.registerDefaultHelpers(this),j.registerDefaultDecorators(this)}var e=c(1)["default"];b.__esModule=!0,b.HandlebarsEnvironment=d;var f=c(5),g=c(6),h=e(g),i=c(10),j=c(18),k=c(20),l=e(k),m="4.0.11";b.VERSION=m;var n=7;b.COMPILER_REVISION=n;var o={1:"<= 1.0.rc.2",2:"== 1.0.0-rc.3",3:"== 1.0.0-rc.4",4:"== 1.x.x",5:"== 2.0.0-alpha.x",6:">= 2.0.0-beta.1",7:">= 4.0.0"};b.REVISION_CHANGES=o;var p="[object Object]";d.prototype={constructor:d,logger:l["default"],log:l["default"].log,registerHelper:function(a,b){if(f.toString.call(a)===p){if(b)throw new h["default"]("Arg not supported with multiple helpers");f.extend(this.helpers,a)}else this.helpers[a]=b},unregisterHelper:function(a){delete this.helpers[a]},registerPartial:function(a,b){if(f.toString.call(a)===p)f.extend(this.partials,a);else{if("undefined"==typeof b)throw new h["default"]('Attempting to register a partial called "'+a+'" as undefined');this.partials[a]=b}},unregisterPartial:function(a){delete this.partials[a]},registerDecorator:function(a,b){if(f.toString.call(a)===p){if(b)throw new h["default"]("Arg not supported with multiple decorators");f.extend(this.decorators,a)}else this.decorators[a]=b},unregisterDecorator:function(a){delete this.decorators[a]}};var q=l["default"].log;b.log=q,b.createFrame=f.createFrame,b.logger=l["default"]},function(a,b){"use strict";function c(a){return k[a]}function d(a){for(var b=1;b<arguments.length;b++)for(var c in arguments[b])Object.prototype.hasOwnProperty.call(arguments[b],c)&&(a[c]=arguments[b][c]);return a}function e(a,b){for(var c=0,d=a.length;c<d;c++)if(a[c]===b)return c;return-1}function f(a){if("string"!=typeof a){if(a&&a.toHTML)return a.toHTML();if(null==a)return"";if(!a)return a+"";a=""+a}return m.test(a)?a.replace(l,c):a}function g(a){return!a&&0!==a||!(!p(a)||0!==a.length)}function h(a){var b=d({},a);return b._parent=a,b}function i(a,b){return a.path=b,a}function j(a,b){return(a?a+".":"")+b}b.__esModule=!0,b.extend=d,b.indexOf=e,b.escapeExpression=f,b.isEmpty=g,b.createFrame=h,b.blockParams=i,b.appendContextPath=j;var k={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#x27;","`":"&#x60;","=":"&#x3D;"},l=/[&<>"'`=]/g,m=/[&<>"'`=]/,n=Object.prototype.toString;b.toString=n;var o=function(a){return"function"==typeof a};o(/x/)&&(b.isFunction=o=function(a){return"function"==typeof a&&"[object Function]"===n.call(a)}),b.isFunction=o;var p=Array.isArray||function(a){return!(!a||"object"!=typeof a)&&"[object Array]"===n.call(a)};b.isArray=p},function(a,b,c){"use strict";function d(a,b){var c=b&&b.loc,g=void 0,h=void 0;c&&(g=c.start.line,h=c.start.column,a+=" - "+g+":"+h);for(var i=Error.prototype.constructor.call(this,a),j=0;j<f.length;j++)this[f[j]]=i[f[j]];Error.captureStackTrace&&Error.captureStackTrace(this,d);try{c&&(this.lineNumber=g,e?Object.defineProperty(this,"column",{value:h,enumerable:!0}):this.column=h)}catch(k){}}var e=c(7)["default"];b.__esModule=!0;var f=["description","fileName","lineNumber","message","name","number","stack"];d.prototype=new Error,b["default"]=d,a.exports=b["default"]},function(a,b,c){a.exports={"default":c(8),__esModule:!0}},function(a,b,c){var d=c(9);a.exports=function(a,b,c){return d.setDesc(a,b,c)}},function(a,b){var c=Object;a.exports={create:c.create,getProto:c.getPrototypeOf,isEnum:{}.propertyIsEnumerable,getDesc:c.getOwnPropertyDescriptor,setDesc:c.defineProperty,setDescs:c.defineProperties,getKeys:c.keys,getNames:c.getOwnPropertyNames,getSymbols:c.getOwnPropertySymbols,each:[].forEach}},function(a,b,c){"use strict";function d(a){g["default"](a),i["default"](a),k["default"](a),m["default"](a),o["default"](a),q["default"](a),s["default"](a)}var e=c(1)["default"];b.__esModule=!0,b.registerDefaultHelpers=d;var f=c(11),g=e(f),h=c(12),i=e(h),j=c(13),k=e(j),l=c(14),m=e(l),n=c(15),o=e(n),p=c(16),q=e(p),r=c(17),s=e(r)},function(a,b,c){"use strict";b.__esModule=!0;var d=c(5);b["default"]=function(a){a.registerHelper("blockHelperMissing",function(b,c){var e=c.inverse,f=c.fn;if(b===!0)return f(this);if(b===!1||null==b)return e(this);if(d.isArray(b))return b.length>0?(c.ids&&(c.ids=[c.name]),a.helpers.each(b,c)):e(this);if(c.data&&c.ids){var g=d.createFrame(c.data);g.contextPath=d.appendContextPath(c.data.contextPath,c.name),c={data:g}}return f(b,c)})},a.exports=b["default"]},function(a,b,c){"use strict";var d=c(1)["default"];b.__esModule=!0;var e=c(5),f=c(6),g=d(f);b["default"]=function(a){a.registerHelper("each",function(a,b){function c(b,c,f){j&&(j.key=b,j.index=c,j.first=0===c,j.last=!!f,k&&(j.contextPath=k+b)),i+=d(a[b],{data:j,blockParams:e.blockParams([a[b],b],[k+b,null])})}if(!b)throw new g["default"]("Must pass iterator to #each");var d=b.fn,f=b.inverse,h=0,i="",j=void 0,k=void 0;if(b.data&&b.ids&&(k=e.appendContextPath(b.data.contextPath,b.ids[0])+"."),e.isFunction(a)&&(a=a.call(this)),b.data&&(j=e.createFrame(b.data)),a&&"object"==typeof a)if(e.isArray(a))for(var l=a.length;h<l;h++)h in a&&c(h,h,h===a.length-1);else{var m=void 0;for(var n in a)a.hasOwnProperty(n)&&(void 0!==m&&c(m,h-1),m=n,h++);void 0!==m&&c(m,h-1,!0)}return 0===h&&(i=f(this)),i})},a.exports=b["default"]},function(a,b,c){"use strict";var d=c(1)["default"];b.__esModule=!0;var e=c(6),f=d(e);b["default"]=function(a){a.registerHelper("helperMissing",function(){if(1!==arguments.length)throw new f["default"]('Missing helper: "'+arguments[arguments.length-1].name+'"')})},a.exports=b["default"]},function(a,b,c){"use strict";b.__esModule=!0;var d=c(5);b["default"]=function(a){a.registerHelper("if",function(a,b){return d.isFunction(a)&&(a=a.call(this)),!b.hash.includeZero&&!a||d.isEmpty(a)?b.inverse(this):b.fn(this)}),a.registerHelper("unless",function(b,c){return a.helpers["if"].call(this,b,{fn:c.inverse,inverse:c.fn,hash:c.hash})})},a.exports=b["default"]},function(a,b){"use strict";b.__esModule=!0,b["default"]=function(a){a.registerHelper("log",function(){for(var b=[void 0],c=arguments[arguments.length-1],d=0;d<arguments.length-1;d++)b.push(arguments[d]);var e=1;null!=c.hash.level?e=c.hash.level:c.data&&null!=c.data.level&&(e=c.data.level),b[0]=e,a.log.apply(a,b)})},a.exports=b["default"]},function(a,b){"use strict";b.__esModule=!0,b["default"]=function(a){a.registerHelper("lookup",function(a,b){return a&&a[b]})},a.exports=b["default"]},function(a,b,c){"use strict";b.__esModule=!0;var d=c(5);b["default"]=function(a){a.registerHelper("with",function(a,b){d.isFunction(a)&&(a=a.call(this));var c=b.fn;if(d.isEmpty(a))return b.inverse(this);var e=b.data;return b.data&&b.ids&&(e=d.createFrame(b.data),e.contextPath=d.appendContextPath(b.data.contextPath,b.ids[0])),c(a,{data:e,blockParams:d.blockParams([a],[e&&e.contextPath])})})},a.exports=b["default"]},function(a,b,c){"use strict";function d(a){g["default"](a)}var e=c(1)["default"];b.__esModule=!0,b.registerDefaultDecorators=d;var f=c(19),g=e(f)},function(a,b,c){"use strict";b.__esModule=!0;var d=c(5);b["default"]=function(a){a.registerDecorator("inline",function(a,b,c,e){var f=a;return b.partials||(b.partials={},f=function(e,f){var g=c.partials;c.partials=d.extend({},g,b.partials);var h=a(e,f);return c.partials=g,h}),b.partials[e.args[0]]=e.fn,f})},a.exports=b["default"]},function(a,b,c){"use strict";b.__esModule=!0;var d=c(5),e={methodMap:["debug","info","warn","error"],level:"info",lookupLevel:function(a){if("string"==typeof a){var b=d.indexOf(e.methodMap,a.toLowerCase());a=b>=0?b:parseInt(a,10)}return a},log:function(a){if(a=e.lookupLevel(a),"undefined"!=typeof console&&e.lookupLevel(e.level)<=a){var b=e.methodMap[a];console[b]||(b="log");for(var c=arguments.length,d=Array(c>1?c-1:0),f=1;f<c;f++)d[f-1]=arguments[f];console[b].apply(console,d)}}};b["default"]=e,a.exports=b["default"]},function(a,b){"use strict";function c(a){this.string=a}b.__esModule=!0,c.prototype.toString=c.prototype.toHTML=function(){return""+this.string},b["default"]=c,a.exports=b["default"]},function(a,b,c){"use strict";function d(a){var b=a&&a[0]||1,c=s.COMPILER_REVISION;if(b!==c){if(b<c){var d=s.REVISION_CHANGES[c],e=s.REVISION_CHANGES[b];throw new r["default"]("Template was precompiled with an older version of Handlebars than the current runtime. Please update your precompiler to a newer version ("+d+") or downgrade your runtime to an older version ("+e+").")}throw new r["default"]("Template was precompiled with a newer version of Handlebars than the current runtime. Please update your runtime to a newer version ("+a[1]+").")}}function e(a,b){function c(c,d,e){e.hash&&(d=p.extend({},d,e.hash),e.ids&&(e.ids[0]=!0)),c=b.VM.resolvePartial.call(this,c,d,e);var f=b.VM.invokePartial.call(this,c,d,e);if(null==f&&b.compile&&(e.partials[e.name]=b.compile(c,a.compilerOptions,b),f=e.partials[e.name](d,e)),null!=f){if(e.indent){for(var g=f.split("\n"),h=0,i=g.length;h<i&&(g[h]||h+1!==i);h++)g[h]=e.indent+g[h];f=g.join("\n")}return f}throw new r["default"]("The partial "+e.name+" could not be compiled when running in runtime-only mode")}function d(b){function c(b){return""+a.main(e,b,e.helpers,e.partials,g,i,h)}var f=arguments.length<=1||void 0===arguments[1]?{}:arguments[1],g=f.data;d._setup(f),!f.partial&&a.useData&&(g=j(b,g));var h=void 0,i=a.useBlockParams?[]:void 0;return a.useDepths&&(h=f.depths?b!=f.depths[0]?[b].concat(f.depths):f.depths:[b]),(c=k(a.main,c,e,f.depths||[],g,i))(b,f)}if(!b)throw new r["default"]("No environment passed to template");if(!a||!a.main)throw new r["default"]("Unknown template object: "+typeof a);a.main.decorator=a.main_d,b.VM.checkRevision(a.compiler);var e={strict:function(a,b){if(!(b in a))throw new r["default"]('"'+b+'" not defined in '+a);return a[b]},lookup:function(a,b){for(var c=a.length,d=0;d<c;d++)if(a[d]&&null!=a[d][b])return a[d][b]},lambda:function(a,b){return"function"==typeof a?a.call(b):a},escapeExpression:p.escapeExpression,invokePartial:c,fn:function(b){var c=a[b];return c.decorator=a[b+"_d"],c},programs:[],program:function(a,b,c,d,e){var g=this.programs[a],h=this.fn(a);return b||e||d||c?g=f(this,a,h,b,c,d,e):g||(g=this.programs[a]=f(this,a,h)),g},data:function(a,b){for(;a&&b--;)a=a._parent;return a},merge:function(a,b){var c=a||b;return a&&b&&a!==b&&(c=p.extend({},b,a)),c},nullContext:l({}),noop:b.VM.noop,compilerInfo:a.compiler};return d.isTop=!0,d._setup=function(c){c.partial?(e.helpers=c.helpers,e.partials=c.partials,e.decorators=c.decorators):(e.helpers=e.merge(c.helpers,b.helpers),a.usePartial&&(e.partials=e.merge(c.partials,b.partials)),(a.usePartial||a.useDecorators)&&(e.decorators=e.merge(c.decorators,b.decorators)))},d._child=function(b,c,d,g){if(a.useBlockParams&&!d)throw new r["default"]("must pass block params");if(a.useDepths&&!g)throw new r["default"]("must pass parent depths");return f(e,b,a[b],c,0,d,g)},d}function f(a,b,c,d,e,f,g){function h(b){var e=arguments.length<=1||void 0===arguments[1]?{}:arguments[1],h=g;return!g||b==g[0]||b===a.nullContext&&null===g[0]||(h=[b].concat(g)),c(a,b,a.helpers,a.partials,e.data||d,f&&[e.blockParams].concat(f),h)}return h=k(c,h,a,g,d,f),h.program=b,h.depth=g?g.length:0,h.blockParams=e||0,h}function g(a,b,c){return a?a.call||c.name||(c.name=a,a=c.partials[a]):a="@partial-block"===c.name?c.data["partial-block"]:c.partials[c.name],a}function h(a,b,c){var d=c.data&&c.data["partial-block"];c.partial=!0,c.ids&&(c.data.contextPath=c.ids[0]||c.data.contextPath);var e=void 0;if(c.fn&&c.fn!==i&&!function(){c.data=s.createFrame(c.data);var a=c.fn;e=c.data["partial-block"]=function(b){var c=arguments.length<=1||void 0===arguments[1]?{}:arguments[1];return c.data=s.createFrame(c.data),c.data["partial-block"]=d,a(b,c)},a.partials&&(c.partials=p.extend({},c.partials,a.partials))}(),void 0===a&&e&&(a=e),void 0===a)throw new r["default"]("The partial "+c.name+" could not be found");if(a instanceof Function)return a(b,c)}function i(){return""}function j(a,b){return b&&"root"in b||(b=b?s.createFrame(b):{},b.root=a),b}function k(a,b,c,d,e,f){if(a.decorator){var g={};b=a.decorator(b,g,c,d&&d[0],e,f,d),p.extend(b,g)}return b}var l=c(23)["default"],m=c(3)["default"],n=c(1)["default"];b.__esModule=!0,b.checkRevision=d,b.template=e,b.wrapProgram=f,b.resolvePartial=g,b.invokePartial=h,b.noop=i;var o=c(5),p=m(o),q=c(6),r=n(q),s=c(4)},function(a,b,c){a.exports={"default":c(24),__esModule:!0}},function(a,b,c){c(25),a.exports=c(30).Object.seal},function(a,b,c){var d=c(26);c(27)("seal",function(a){return function(b){return a&&d(b)?a(b):b}})},function(a,b){a.exports=function(a){return"object"==typeof a?null!==a:"function"==typeof a}},function(a,b,c){var d=c(28),e=c(30),f=c(33);a.exports=function(a,b){var c=(e.Object||{})[a]||Object[a],g={};g[a]=b(c),d(d.S+d.F*f(function(){c(1)}),"Object",g)}},function(a,b,c){var d=c(29),e=c(30),f=c(31),g="prototype",h=function(a,b,c){var i,j,k,l=a&h.F,m=a&h.G,n=a&h.S,o=a&h.P,p=a&h.B,q=a&h.W,r=m?e:e[b]||(e[b]={}),s=m?d:n?d[b]:(d[b]||{})[g];m&&(c=b);for(i in c)j=!l&&s&&i in s,j&&i in r||(k=j?s[i]:c[i],r[i]=m&&"function"!=typeof s[i]?c[i]:p&&j?f(k,d):q&&s[i]==k?function(a){var b=function(b){return this instanceof a?new a(b):a(b)};return b[g]=a[g],b}(k):o&&"function"==typeof k?f(Function.call,k):k,o&&((r[g]||(r[g]={}))[i]=k))};h.F=1,h.G=2,h.S=4,h.P=8,h.B=16,h.W=32,a.exports=h},function(a,b){var c=a.exports="undefined"!=typeof window&&window.Math==Math?window:"undefined"!=typeof self&&self.Math==Math?self:Function("return this")();"number"==typeof __g&&(__g=c)},function(a,b){var c=a.exports={version:"1.2.6"};"number"==typeof __e&&(__e=c)},function(a,b,c){var d=c(32);a.exports=function(a,b,c){if(d(a),void 0===b)return a;switch(c){case 1:return function(c){return a.call(b,c)};case 2:return function(c,d){return a.call(b,c,d)};case 3:return function(c,d,e){return a.call(b,c,d,e)}}return function(){return a.apply(b,arguments)}}},function(a,b){a.exports=function(a){if("function"!=typeof a)throw TypeError(a+" is not a function!");return a}},function(a,b){a.exports=function(a){try{return!!a()}catch(b){return!0}}},function(a,b){(function(c){"use strict";b.__esModule=!0,b["default"]=function(a){var b="undefined"!=typeof c?c:window,d=b.Handlebars;a.noConflict=function(){return b.Handlebars===a&&(b.Handlebars=d),a}},a.exports=b["default"]}).call(b,function(){return this}())},function(a,b){"use strict";b.__esModule=!0;var c={helpers:{helperExpression:function(a){return"SubExpression"===a.type||("MustacheStatement"===a.type||"BlockStatement"===a.type)&&!!(a.params&&a.params.length||a.hash)},scopedId:function(a){return/^\.|this\b/.test(a.original)},simpleId:function(a){return 1===a.parts.length&&!c.helpers.scopedId(a)&&!a.depth}}};b["default"]=c,a.exports=b["default"]},function(a,b,c){"use strict";function d(a,b){if("Program"===a.type)return a;h["default"].yy=n,n.locInfo=function(a){return new n.SourceLocation(b&&b.srcName,a)};var c=new j["default"](b);return c.accept(h["default"].parse(a))}var e=c(1)["default"],f=c(3)["default"];b.__esModule=!0,b.parse=d;var g=c(37),h=e(g),i=c(38),j=e(i),k=c(40),l=f(k),m=c(5);b.parser=h["default"];var n={};m.extend(n,l)},function(a,b){"use strict";b.__esModule=!0;var c=function(){function a(){this.yy={}}var b={trace:function(){},yy:{},symbols_:{error:2,root:3,program:4,EOF:5,program_repetition0:6,statement:7,mustache:8,block:9,rawBlock:10,partial:11,partialBlock:12,content:13,COMMENT:14,CONTENT:15,openRawBlock:16,rawBlock_repetition_plus0:17,END_RAW_BLOCK:18,OPEN_RAW_BLOCK:19,helperName:20,openRawBlock_repetition0:21,openRawBlock_option0:22,CLOSE_RAW_BLOCK:23,openBlock:24,block_option0:25,closeBlock:26,openInverse:27,block_option1:28,OPEN_BLOCK:29,openBlock_repetition0:30,openBlock_option0:31,openBlock_option1:32,CLOSE:33,OPEN_INVERSE:34,openInverse_repetition0:35,openInverse_option0:36,openInverse_option1:37,openInverseChain:38,OPEN_INVERSE_CHAIN:39,openInverseChain_repetition0:40,openInverseChain_option0:41,openInverseChain_option1:42,inverseAndProgram:43,INVERSE:44,inverseChain:45,inverseChain_option0:46,OPEN_ENDBLOCK:47,OPEN:48,mustache_repetition0:49,mustache_option0:50,OPEN_UNESCAPED:51,mustache_repetition1:52,mustache_option1:53,CLOSE_UNESCAPED:54,OPEN_PARTIAL:55,partialName:56,partial_repetition0:57,partial_option0:58,openPartialBlock:59,OPEN_PARTIAL_BLOCK:60,openPartialBlock_repetition0:61,openPartialBlock_option0:62,param:63,sexpr:64,OPEN_SEXPR:65,sexpr_repetition0:66,sexpr_option0:67,CLOSE_SEXPR:68,hash:69,hash_repetition_plus0:70,hashSegment:71,ID:72,EQUALS:73,blockParams:74,OPEN_BLOCK_PARAMS:75,blockParams_repetition_plus0:76,CLOSE_BLOCK_PARAMS:77,path:78,dataName:79,STRING:80,NUMBER:81,BOOLEAN:82,UNDEFINED:83,NULL:84,DATA:85,pathSegments:86,SEP:87,$accept:0,$end:1},terminals_:{2:"error",5:"EOF",14:"COMMENT",15:"CONTENT",18:"END_RAW_BLOCK",19:"OPEN_RAW_BLOCK",23:"CLOSE_RAW_BLOCK",29:"OPEN_BLOCK",33:"CLOSE",34:"OPEN_INVERSE",39:"OPEN_INVERSE_CHAIN",44:"INVERSE",47:"OPEN_ENDBLOCK",48:"OPEN",51:"OPEN_UNESCAPED",54:"CLOSE_UNESCAPED",55:"OPEN_PARTIAL",60:"OPEN_PARTIAL_BLOCK",65:"OPEN_SEXPR",68:"CLOSE_SEXPR",72:"ID",73:"EQUALS",75:"OPEN_BLOCK_PARAMS",77:"CLOSE_BLOCK_PARAMS",80:"STRING",81:"NUMBER",82:"BOOLEAN",83:"UNDEFINED",84:"NULL",85:"DATA",87:"SEP"},productions_:[0,[3,2],[4,1],[7,1],[7,1],[7,1],[7,1],[7,1],[7,1],[7,1],[13,1],[10,3],[16,5],[9,4],[9,4],[24,6],[27,6],[38,6],[43,2],[45,3],[45,1],[26,3],[8,5],[8,5],[11,5],[12,3],[59,5],[63,1],[63,1],[64,5],[69,1],[71,3],[74,3],[20,1],[20,1],[20,1],[20,1],[20,1],[20,1],[20,1],[56,1],[56,1],[79,2],[78,1],[86,3],[86,1],[6,0],[6,2],[17,1],[17,2],[21,0],[21,2],[22,0],[22,1],[25,0],[25,1],[28,0],[28,1],[30,0],[30,2],[31,0],[31,1],[32,0],[32,1],[35,0],[35,2],[36,0],[36,1],[37,0],[37,1],[40,0],[40,2],[41,0],[41,1],[42,0],[42,1],[46,0],[46,1],[49,0],[49,2],[50,0],[50,1],[52,0],[52,2],[53,0],[53,1],[57,0],[57,2],[58,0],[58,1],[61,0],[61,2],[62,0],[62,1],[66,0],[66,2],[67,0],[67,1],[70,1],[70,2],[76,1],[76,2]],performAction:function(a,b,c,d,e,f,g){var h=f.length-1;switch(e){case 1:return f[h-1];case 2:this.$=d.prepareProgram(f[h]);break;case 3:this.$=f[h];break;case 4:this.$=f[h];break;case 5:this.$=f[h];break;case 6:this.$=f[h];break;case 7:this.$=f[h];break;case 8:this.$=f[h];break;case 9:this.$={type:"CommentStatement",value:d.stripComment(f[h]),strip:d.stripFlags(f[h],f[h]),loc:d.locInfo(this._$)};break;case 10:this.$={type:"ContentStatement",original:f[h],value:f[h],loc:d.locInfo(this._$)};break;case 11:this.$=d.prepareRawBlock(f[h-2],f[h-1],f[h],this._$);break;case 12:this.$={path:f[h-3],params:f[h-2],hash:f[h-1]};break;case 13:this.$=d.prepareBlock(f[h-3],f[h-2],f[h-1],f[h],!1,this._$);break;case 14:this.$=d.prepareBlock(f[h-3],f[h-2],f[h-1],f[h],!0,this._$);break;case 15:this.$={open:f[h-5],path:f[h-4],params:f[h-3],hash:f[h-2],blockParams:f[h-1],strip:d.stripFlags(f[h-5],f[h])};break;case 16:this.$={path:f[h-4],params:f[h-3],hash:f[h-2],blockParams:f[h-1],strip:d.stripFlags(f[h-5],f[h])};break;case 17:this.$={path:f[h-4],params:f[h-3],hash:f[h-2],blockParams:f[h-1],strip:d.stripFlags(f[h-5],f[h])};break;case 18:this.$={strip:d.stripFlags(f[h-1],f[h-1]),program:f[h]};break;case 19:var i=d.prepareBlock(f[h-2],f[h-1],f[h],f[h],!1,this._$),j=d.prepareProgram([i],f[h-1].loc);j.chained=!0,this.$={strip:f[h-2].strip,program:j,chain:!0};break;case 20:this.$=f[h];break;case 21:this.$={path:f[h-1],strip:d.stripFlags(f[h-2],f[h])};break;case 22:this.$=d.prepareMustache(f[h-3],f[h-2],f[h-1],f[h-4],d.stripFlags(f[h-4],f[h]),this._$);break;case 23:this.$=d.prepareMustache(f[h-3],f[h-2],f[h-1],f[h-4],d.stripFlags(f[h-4],f[h]),this._$);break;case 24:this.$={type:"PartialStatement",name:f[h-3],params:f[h-2],hash:f[h-1],indent:"",strip:d.stripFlags(f[h-4],f[h]),loc:d.locInfo(this._$)};break;case 25:this.$=d.preparePartialBlock(f[h-2],f[h-1],f[h],this._$);break;case 26:this.$={path:f[h-3],params:f[h-2],hash:f[h-1],strip:d.stripFlags(f[h-4],f[h])};break;case 27:this.$=f[h];break;case 28:this.$=f[h];break;case 29:this.$={type:"SubExpression",path:f[h-3],params:f[h-2],hash:f[h-1],loc:d.locInfo(this._$)};break;case 30:this.$={type:"Hash",pairs:f[h],loc:d.locInfo(this._$)};break;case 31:this.$={type:"HashPair",key:d.id(f[h-2]),value:f[h],loc:d.locInfo(this._$)};break;case 32:this.$=d.id(f[h-1]);break;case 33:this.$=f[h];break;case 34:this.$=f[h];break;case 35:this.$={type:"StringLiteral",value:f[h],original:f[h],loc:d.locInfo(this._$)};break;case 36:this.$={type:"NumberLiteral",value:Number(f[h]),original:Number(f[h]),loc:d.locInfo(this._$)};break;case 37:this.$={type:"BooleanLiteral",value:"true"===f[h],original:"true"===f[h],loc:d.locInfo(this._$)};break;case 38:this.$={type:"UndefinedLiteral",original:void 0,value:void 0,loc:d.locInfo(this._$)};break;case 39:this.$={type:"NullLiteral",original:null,value:null,loc:d.locInfo(this._$)};break;case 40:this.$=f[h];break;case 41:this.$=f[h];break;case 42:this.$=d.preparePath(!0,f[h],this._$);break;case 43:this.$=d.preparePath(!1,f[h],this._$);break;case 44:f[h-2].push({part:d.id(f[h]),original:f[h],separator:f[h-1]}),this.$=f[h-2];break;case 45:this.$=[{part:d.id(f[h]),original:f[h]}];break;case 46:this.$=[];break;case 47:f[h-1].push(f[h]);break;case 48:this.$=[f[h]];break;case 49:f[h-1].push(f[h]);break;case 50:this.$=[];break;case 51:f[h-1].push(f[h]);break;case 58:this.$=[];break;case 59:f[h-1].push(f[h]);break;case 64:this.$=[];break;case 65:f[h-1].push(f[h]);break;case 70:this.$=[];break;case 71:f[h-1].push(f[h]);break;case 78:this.$=[];break;case 79:f[h-1].push(f[h]);break;case 82:this.$=[];break;case 83:f[h-1].push(f[h]);break;case 86:this.$=[];break;case 87:f[h-1].push(f[h]);break;case 90:this.$=[];break;case 91:f[h-1].push(f[h]);break;case 94:this.$=[];break;case 95:f[h-1].push(f[h]);break;case 98:this.$=[f[h]];break;case 99:f[h-1].push(f[h]);break;case 100:this.$=[f[h]];break;case 101:f[h-1].push(f[h])}},table:[{3:1,4:2,5:[2,46],6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{1:[3]},{5:[1,4]},{5:[2,2],7:5,8:6,9:7,10:8,11:9,12:10,13:11,14:[1,12],15:[1,20],16:17,19:[1,23],24:15,27:16,29:[1,21],34:[1,22],39:[2,2],44:[2,2],47:[2,2],48:[1,13],51:[1,14],55:[1,18],59:19,60:[1,24]},{1:[2,1]},{5:[2,47],14:[2,47],15:[2,47],19:[2,47],29:[2,47],34:[2,47],39:[2,47],44:[2,47],47:[2,47],48:[2,47],51:[2,47],55:[2,47],60:[2,47]},{5:[2,3],14:[2,3],15:[2,3],19:[2,3],29:[2,3],34:[2,3],39:[2,3],44:[2,3],47:[2,3],48:[2,3],51:[2,3],55:[2,3],60:[2,3]},{5:[2,4],14:[2,4],15:[2,4],19:[2,4],29:[2,4],34:[2,4],39:[2,4],44:[2,4],47:[2,4],48:[2,4],51:[2,4],55:[2,4],60:[2,4]},{5:[2,5],14:[2,5],15:[2,5],19:[2,5],29:[2,5],34:[2,5],39:[2,5],44:[2,5],47:[2,5],48:[2,5],51:[2,5],55:[2,5],60:[2,5]},{5:[2,6],14:[2,6],15:[2,6],19:[2,6],29:[2,6],34:[2,6],39:[2,6],44:[2,6],47:[2,6],48:[2,6],51:[2,6],55:[2,6],60:[2,6]},{5:[2,7],14:[2,7],15:[2,7],19:[2,7],29:[2,7],34:[2,7],39:[2,7],44:[2,7],47:[2,7],48:[2,7],51:[2,7],55:[2,7],60:[2,7]},{5:[2,8],14:[2,8],15:[2,8],19:[2,8],29:[2,8],34:[2,8],39:[2,8],44:[2,8],47:[2,8],48:[2,8],51:[2,8],55:[2,8],60:[2,8]},{5:[2,9],14:[2,9],15:[2,9],19:[2,9],29:[2,9],34:[2,9],39:[2,9],44:[2,9],47:[2,9],48:[2,9],51:[2,9],55:[2,9],60:[2,9]},{20:25,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:36,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{4:37,6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],39:[2,46],44:[2,46],47:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{4:38,6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],44:[2,46],47:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{13:40,15:[1,20],17:39},{20:42,56:41,64:43,65:[1,44],72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{4:45,6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],47:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{5:[2,10],14:[2,10],15:[2,10],18:[2,10],19:[2,10],29:[2,10],34:[2,10],39:[2,10],44:[2,10],47:[2,10],48:[2,10],51:[2,10],55:[2,10],60:[2,10]},{20:46,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:47,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:48,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:42,56:49,64:43,65:[1,44],72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{33:[2,78],49:50,65:[2,78],72:[2,78],80:[2,78],81:[2,78],82:[2,78],83:[2,78],84:[2,78],85:[2,78]},{23:[2,33],33:[2,33],54:[2,33],65:[2,33],68:[2,33],72:[2,33],75:[2,33],80:[2,33],81:[2,33],82:[2,33],83:[2,33],84:[2,33],85:[2,33]},{23:[2,34],33:[2,34],54:[2,34],65:[2,34],68:[2,34],72:[2,34],75:[2,34],80:[2,34],81:[2,34],82:[2,34],83:[2,34],84:[2,34],85:[2,34]},{23:[2,35],33:[2,35],54:[2,35],65:[2,35],68:[2,35],72:[2,35],75:[2,35],80:[2,35],81:[2,35],82:[2,35],83:[2,35],84:[2,35],85:[2,35]},{23:[2,36],33:[2,36],54:[2,36],65:[2,36],68:[2,36],72:[2,36],75:[2,36],80:[2,36],81:[2,36],82:[2,36],83:[2,36],84:[2,36],85:[2,36]},{23:[2,37],33:[2,37],54:[2,37],65:[2,37],68:[2,37],72:[2,37],75:[2,37],80:[2,37],81:[2,37],82:[2,37],83:[2,37],84:[2,37],85:[2,37]},{23:[2,38],33:[2,38],54:[2,38],65:[2,38],68:[2,38],72:[2,38],75:[2,38],80:[2,38],81:[2,38],82:[2,38],83:[2,38],84:[2,38],85:[2,38]},{23:[2,39],33:[2,39],54:[2,39],65:[2,39],68:[2,39],72:[2,39],75:[2,39],80:[2,39],81:[2,39],82:[2,39],83:[2,39],84:[2,39],85:[2,39]},{23:[2,43],33:[2,43],54:[2,43],65:[2,43],68:[2,43],72:[2,43],75:[2,43],80:[2,43],81:[2,43],82:[2,43],83:[2,43],84:[2,43],85:[2,43],87:[1,51]},{72:[1,35],86:52},{23:[2,45],33:[2,45],54:[2,45],65:[2,45],68:[2,45],72:[2,45],75:[2,45],80:[2,45],81:[2,45],82:[2,45],83:[2,45],84:[2,45],85:[2,45],87:[2,45]},{52:53,54:[2,82],65:[2,82],72:[2,82],80:[2,82],81:[2,82],82:[2,82],83:[2,82],84:[2,82],85:[2,82]},{25:54,38:56,39:[1,58],43:57,44:[1,59],45:55,47:[2,54]},{28:60,43:61,44:[1,59],47:[2,56]},{13:63,15:[1,20],18:[1,62]},{15:[2,48],18:[2,48]},{33:[2,86],57:64,65:[2,86],72:[2,86],80:[2,86],81:[2,86],82:[2,86],83:[2,86],84:[2,86],85:[2,86]},{33:[2,40],65:[2,40],72:[2,40],80:[2,40],81:[2,40],82:[2,40],83:[2,40],84:[2,40],85:[2,40]},{33:[2,41],65:[2,41],72:[2,41],80:[2,41],81:[2,41],82:[2,41],83:[2,41],84:[2,41],85:[2,41]},{20:65,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{26:66,47:[1,67]},{30:68,33:[2,58],65:[2,58],72:[2,58],75:[2,58],80:[2,58],81:[2,58],82:[2,58],83:[2,58],84:[2,58],85:[2,58]},{33:[2,64],35:69,65:[2,64],72:[2,64],75:[2,64],80:[2,64],81:[2,64],82:[2,64],83:[2,64],84:[2,64],85:[2,64]},{21:70,23:[2,50],65:[2,50],72:[2,50],80:[2,50],81:[2,50],82:[2,50],83:[2,50],84:[2,50],85:[2,50]},{33:[2,90],61:71,65:[2,90],72:[2,90],80:[2,90],81:[2,90],82:[2,90],83:[2,90],84:[2,90],85:[2,90]},{20:75,33:[2,80],50:72,63:73,64:76,65:[1,44],69:74,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{72:[1,80]},{23:[2,42],33:[2,42],54:[2,42],65:[2,42],68:[2,42],72:[2,42],75:[2,42],80:[2,42],81:[2,42],82:[2,42],83:[2,42],84:[2,42],85:[2,42],87:[1,51]},{20:75,53:81,54:[2,84],63:82,64:76,65:[1,44],69:83,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{26:84,47:[1,67]},{47:[2,55]},{4:85,6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],39:[2,46],44:[2,46],47:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{47:[2,20]},{20:86,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{4:87,6:3,14:[2,46],15:[2,46],19:[2,46],29:[2,46],34:[2,46],47:[2,46],48:[2,46],51:[2,46],55:[2,46],60:[2,46]},{26:88,47:[1,67]},{47:[2,57]},{5:[2,11],14:[2,11],15:[2,11],19:[2,11],29:[2,11],34:[2,11],39:[2,11],44:[2,11],47:[2,11],48:[2,11],51:[2,11],55:[2,11],60:[2,11]},{15:[2,49],18:[2,49]},{20:75,33:[2,88],58:89,63:90,64:76,65:[1,44],69:91,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{65:[2,94],66:92,68:[2,94],72:[2,94],80:[2,94],81:[2,94],82:[2,94],83:[2,94],84:[2,94],85:[2,94]},{5:[2,25],14:[2,25],15:[2,25],19:[2,25],29:[2,25],34:[2,25],39:[2,25],44:[2,25],47:[2,25],48:[2,25],51:[2,25],55:[2,25],60:[2,25]},{20:93,72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:75,31:94,33:[2,60],63:95,64:76,65:[1,44],69:96,70:77,71:78,72:[1,79],75:[2,60],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:75,33:[2,66],36:97,63:98,64:76,65:[1,44],69:99,70:77,71:78,72:[1,79],75:[2,66],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:75,22:100,23:[2,52],63:101,64:76,65:[1,44],69:102,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{20:75,33:[2,92],62:103,63:104,64:76,65:[1,44],69:105,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{33:[1,106]},{33:[2,79],65:[2,79],72:[2,79],80:[2,79],81:[2,79],82:[2,79],83:[2,79],84:[2,79],85:[2,79]},{33:[2,81]},{23:[2,27],33:[2,27],54:[2,27],65:[2,27],68:[2,27],72:[2,27],75:[2,27],80:[2,27],81:[2,27],82:[2,27],83:[2,27],84:[2,27],85:[2,27]},{23:[2,28],33:[2,28],54:[2,28],65:[2,28],68:[2,28],72:[2,28],75:[2,28],80:[2,28],81:[2,28],82:[2,28],83:[2,28],84:[2,28],85:[2,28]},{23:[2,30],33:[2,30],54:[2,30],68:[2,30],71:107,72:[1,108],75:[2,30]},{23:[2,98],33:[2,98],54:[2,98],68:[2,98],72:[2,98],75:[2,98]},{23:[2,45],33:[2,45],54:[2,45],65:[2,45],68:[2,45],72:[2,45],73:[1,109],75:[2,45],80:[2,45],81:[2,45],82:[2,45],83:[2,45],84:[2,45],85:[2,45],87:[2,45]},{23:[2,44],33:[2,44],54:[2,44],65:[2,44],68:[2,44],72:[2,44],75:[2,44],80:[2,44],81:[2,44],82:[2,44],83:[2,44],84:[2,44],85:[2,44],87:[2,44]},{54:[1,110]},{54:[2,83],65:[2,83],72:[2,83],80:[2,83],81:[2,83],82:[2,83],83:[2,83],84:[2,83],85:[2,83]},{54:[2,85]},{5:[2,13],14:[2,13],15:[2,13],19:[2,13],29:[2,13],34:[2,13],39:[2,13],44:[2,13],47:[2,13],48:[2,13],51:[2,13],55:[2,13],60:[2,13]},{38:56,39:[1,58],43:57,44:[1,59],45:112,46:111,47:[2,76]},{33:[2,70],40:113,65:[2,70],72:[2,70],75:[2,70],80:[2,70],81:[2,70],82:[2,70],83:[2,70],84:[2,70],85:[2,70]},{47:[2,18]},{5:[2,14],14:[2,14],15:[2,14],19:[2,14],29:[2,14],34:[2,14],39:[2,14],44:[2,14],47:[2,14],48:[2,14],51:[2,14],55:[2,14],60:[2,14]},{33:[1,114]},{33:[2,87],65:[2,87],72:[2,87],80:[2,87],81:[2,87],82:[2,87],83:[2,87],84:[2,87],
+85:[2,87]},{33:[2,89]},{20:75,63:116,64:76,65:[1,44],67:115,68:[2,96],69:117,70:77,71:78,72:[1,79],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{33:[1,118]},{32:119,33:[2,62],74:120,75:[1,121]},{33:[2,59],65:[2,59],72:[2,59],75:[2,59],80:[2,59],81:[2,59],82:[2,59],83:[2,59],84:[2,59],85:[2,59]},{33:[2,61],75:[2,61]},{33:[2,68],37:122,74:123,75:[1,121]},{33:[2,65],65:[2,65],72:[2,65],75:[2,65],80:[2,65],81:[2,65],82:[2,65],83:[2,65],84:[2,65],85:[2,65]},{33:[2,67],75:[2,67]},{23:[1,124]},{23:[2,51],65:[2,51],72:[2,51],80:[2,51],81:[2,51],82:[2,51],83:[2,51],84:[2,51],85:[2,51]},{23:[2,53]},{33:[1,125]},{33:[2,91],65:[2,91],72:[2,91],80:[2,91],81:[2,91],82:[2,91],83:[2,91],84:[2,91],85:[2,91]},{33:[2,93]},{5:[2,22],14:[2,22],15:[2,22],19:[2,22],29:[2,22],34:[2,22],39:[2,22],44:[2,22],47:[2,22],48:[2,22],51:[2,22],55:[2,22],60:[2,22]},{23:[2,99],33:[2,99],54:[2,99],68:[2,99],72:[2,99],75:[2,99]},{73:[1,109]},{20:75,63:126,64:76,65:[1,44],72:[1,35],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{5:[2,23],14:[2,23],15:[2,23],19:[2,23],29:[2,23],34:[2,23],39:[2,23],44:[2,23],47:[2,23],48:[2,23],51:[2,23],55:[2,23],60:[2,23]},{47:[2,19]},{47:[2,77]},{20:75,33:[2,72],41:127,63:128,64:76,65:[1,44],69:129,70:77,71:78,72:[1,79],75:[2,72],78:26,79:27,80:[1,28],81:[1,29],82:[1,30],83:[1,31],84:[1,32],85:[1,34],86:33},{5:[2,24],14:[2,24],15:[2,24],19:[2,24],29:[2,24],34:[2,24],39:[2,24],44:[2,24],47:[2,24],48:[2,24],51:[2,24],55:[2,24],60:[2,24]},{68:[1,130]},{65:[2,95],68:[2,95],72:[2,95],80:[2,95],81:[2,95],82:[2,95],83:[2,95],84:[2,95],85:[2,95]},{68:[2,97]},{5:[2,21],14:[2,21],15:[2,21],19:[2,21],29:[2,21],34:[2,21],39:[2,21],44:[2,21],47:[2,21],48:[2,21],51:[2,21],55:[2,21],60:[2,21]},{33:[1,131]},{33:[2,63]},{72:[1,133],76:132},{33:[1,134]},{33:[2,69]},{15:[2,12]},{14:[2,26],15:[2,26],19:[2,26],29:[2,26],34:[2,26],47:[2,26],48:[2,26],51:[2,26],55:[2,26],60:[2,26]},{23:[2,31],33:[2,31],54:[2,31],68:[2,31],72:[2,31],75:[2,31]},{33:[2,74],42:135,74:136,75:[1,121]},{33:[2,71],65:[2,71],72:[2,71],75:[2,71],80:[2,71],81:[2,71],82:[2,71],83:[2,71],84:[2,71],85:[2,71]},{33:[2,73],75:[2,73]},{23:[2,29],33:[2,29],54:[2,29],65:[2,29],68:[2,29],72:[2,29],75:[2,29],80:[2,29],81:[2,29],82:[2,29],83:[2,29],84:[2,29],85:[2,29]},{14:[2,15],15:[2,15],19:[2,15],29:[2,15],34:[2,15],39:[2,15],44:[2,15],47:[2,15],48:[2,15],51:[2,15],55:[2,15],60:[2,15]},{72:[1,138],77:[1,137]},{72:[2,100],77:[2,100]},{14:[2,16],15:[2,16],19:[2,16],29:[2,16],34:[2,16],44:[2,16],47:[2,16],48:[2,16],51:[2,16],55:[2,16],60:[2,16]},{33:[1,139]},{33:[2,75]},{33:[2,32]},{72:[2,101],77:[2,101]},{14:[2,17],15:[2,17],19:[2,17],29:[2,17],34:[2,17],39:[2,17],44:[2,17],47:[2,17],48:[2,17],51:[2,17],55:[2,17],60:[2,17]}],defaultActions:{4:[2,1],55:[2,55],57:[2,20],61:[2,57],74:[2,81],83:[2,85],87:[2,18],91:[2,89],102:[2,53],105:[2,93],111:[2,19],112:[2,77],117:[2,97],120:[2,63],123:[2,69],124:[2,12],136:[2,75],137:[2,32]},parseError:function(a,b){throw new Error(a)},parse:function(a){function b(){var a;return a=c.lexer.lex()||1,"number"!=typeof a&&(a=c.symbols_[a]||a),a}var c=this,d=[0],e=[null],f=[],g=this.table,h="",i=0,j=0,k=0;this.lexer.setInput(a),this.lexer.yy=this.yy,this.yy.lexer=this.lexer,this.yy.parser=this,"undefined"==typeof this.lexer.yylloc&&(this.lexer.yylloc={});var l=this.lexer.yylloc;f.push(l);var m=this.lexer.options&&this.lexer.options.ranges;"function"==typeof this.yy.parseError&&(this.parseError=this.yy.parseError);for(var n,o,p,q,r,s,t,u,v,w={};;){if(p=d[d.length-1],this.defaultActions[p]?q=this.defaultActions[p]:(null!==n&&"undefined"!=typeof n||(n=b()),q=g[p]&&g[p][n]),"undefined"==typeof q||!q.length||!q[0]){var x="";if(!k){v=[];for(s in g[p])this.terminals_[s]&&s>2&&v.push("'"+this.terminals_[s]+"'");x=this.lexer.showPosition?"Parse error on line "+(i+1)+":\n"+this.lexer.showPosition()+"\nExpecting "+v.join(", ")+", got '"+(this.terminals_[n]||n)+"'":"Parse error on line "+(i+1)+": Unexpected "+(1==n?"end of input":"'"+(this.terminals_[n]||n)+"'"),this.parseError(x,{text:this.lexer.match,token:this.terminals_[n]||n,line:this.lexer.yylineno,loc:l,expected:v})}}if(q[0]instanceof Array&&q.length>1)throw new Error("Parse Error: multiple actions possible at state: "+p+", token: "+n);switch(q[0]){case 1:d.push(n),e.push(this.lexer.yytext),f.push(this.lexer.yylloc),d.push(q[1]),n=null,o?(n=o,o=null):(j=this.lexer.yyleng,h=this.lexer.yytext,i=this.lexer.yylineno,l=this.lexer.yylloc,k>0&&k--);break;case 2:if(t=this.productions_[q[1]][1],w.$=e[e.length-t],w._$={first_line:f[f.length-(t||1)].first_line,last_line:f[f.length-1].last_line,first_column:f[f.length-(t||1)].first_column,last_column:f[f.length-1].last_column},m&&(w._$.range=[f[f.length-(t||1)].range[0],f[f.length-1].range[1]]),r=this.performAction.call(w,h,j,i,this.yy,q[1],e,f),"undefined"!=typeof r)return r;t&&(d=d.slice(0,-1*t*2),e=e.slice(0,-1*t),f=f.slice(0,-1*t)),d.push(this.productions_[q[1]][0]),e.push(w.$),f.push(w._$),u=g[d[d.length-2]][d[d.length-1]],d.push(u);break;case 3:return!0}}return!0}},c=function(){var a={EOF:1,parseError:function(a,b){if(!this.yy.parser)throw new Error(a);this.yy.parser.parseError(a,b)},setInput:function(a){return this._input=a,this._more=this._less=this.done=!1,this.yylineno=this.yyleng=0,this.yytext=this.matched=this.match="",this.conditionStack=["INITIAL"],this.yylloc={first_line:1,first_column:0,last_line:1,last_column:0},this.options.ranges&&(this.yylloc.range=[0,0]),this.offset=0,this},input:function(){var a=this._input[0];this.yytext+=a,this.yyleng++,this.offset++,this.match+=a,this.matched+=a;var b=a.match(/(?:\r\n?|\n).*/g);return b?(this.yylineno++,this.yylloc.last_line++):this.yylloc.last_column++,this.options.ranges&&this.yylloc.range[1]++,this._input=this._input.slice(1),a},unput:function(a){var b=a.length,c=a.split(/(?:\r\n?|\n)/g);this._input=a+this._input,this.yytext=this.yytext.substr(0,this.yytext.length-b-1),this.offset-=b;var d=this.match.split(/(?:\r\n?|\n)/g);this.match=this.match.substr(0,this.match.length-1),this.matched=this.matched.substr(0,this.matched.length-1),c.length-1&&(this.yylineno-=c.length-1);var e=this.yylloc.range;return this.yylloc={first_line:this.yylloc.first_line,last_line:this.yylineno+1,first_column:this.yylloc.first_column,last_column:c?(c.length===d.length?this.yylloc.first_column:0)+d[d.length-c.length].length-c[0].length:this.yylloc.first_column-b},this.options.ranges&&(this.yylloc.range=[e[0],e[0]+this.yyleng-b]),this},more:function(){return this._more=!0,this},less:function(a){this.unput(this.match.slice(a))},pastInput:function(){var a=this.matched.substr(0,this.matched.length-this.match.length);return(a.length>20?"...":"")+a.substr(-20).replace(/\n/g,"")},upcomingInput:function(){var a=this.match;return a.length<20&&(a+=this._input.substr(0,20-a.length)),(a.substr(0,20)+(a.length>20?"...":"")).replace(/\n/g,"")},showPosition:function(){var a=this.pastInput(),b=new Array(a.length+1).join("-");return a+this.upcomingInput()+"\n"+b+"^"},next:function(){if(this.done)return this.EOF;this._input||(this.done=!0);var a,b,c,d,e;this._more||(this.yytext="",this.match="");for(var f=this._currentRules(),g=0;g<f.length&&(c=this._input.match(this.rules[f[g]]),!c||b&&!(c[0].length>b[0].length)||(b=c,d=g,this.options.flex));g++);return b?(e=b[0].match(/(?:\r\n?|\n).*/g),e&&(this.yylineno+=e.length),this.yylloc={first_line:this.yylloc.last_line,last_line:this.yylineno+1,first_column:this.yylloc.last_column,last_column:e?e[e.length-1].length-e[e.length-1].match(/\r?\n?/)[0].length:this.yylloc.last_column+b[0].length},this.yytext+=b[0],this.match+=b[0],this.matches=b,this.yyleng=this.yytext.length,this.options.ranges&&(this.yylloc.range=[this.offset,this.offset+=this.yyleng]),this._more=!1,this._input=this._input.slice(b[0].length),this.matched+=b[0],a=this.performAction.call(this,this.yy,this,f[d],this.conditionStack[this.conditionStack.length-1]),this.done&&this._input&&(this.done=!1),a?a:void 0):""===this._input?this.EOF:this.parseError("Lexical error on line "+(this.yylineno+1)+". Unrecognized text.\n"+this.showPosition(),{text:"",token:null,line:this.yylineno})},lex:function(){var a=this.next();return"undefined"!=typeof a?a:this.lex()},begin:function(a){this.conditionStack.push(a)},popState:function(){return this.conditionStack.pop()},_currentRules:function(){return this.conditions[this.conditionStack[this.conditionStack.length-1]].rules},topState:function(){return this.conditionStack[this.conditionStack.length-2]},pushState:function(a){this.begin(a)}};return a.options={},a.performAction=function(a,b,c,d){function e(a,c){return b.yytext=b.yytext.substr(a,b.yyleng-c)}switch(c){case 0:if("\\\\"===b.yytext.slice(-2)?(e(0,1),this.begin("mu")):"\\"===b.yytext.slice(-1)?(e(0,1),this.begin("emu")):this.begin("mu"),b.yytext)return 15;break;case 1:return 15;case 2:return this.popState(),15;case 3:return this.begin("raw"),15;case 4:return this.popState(),"raw"===this.conditionStack[this.conditionStack.length-1]?15:(b.yytext=b.yytext.substr(5,b.yyleng-9),"END_RAW_BLOCK");case 5:return 15;case 6:return this.popState(),14;case 7:return 65;case 8:return 68;case 9:return 19;case 10:return this.popState(),this.begin("raw"),23;case 11:return 55;case 12:return 60;case 13:return 29;case 14:return 47;case 15:return this.popState(),44;case 16:return this.popState(),44;case 17:return 34;case 18:return 39;case 19:return 51;case 20:return 48;case 21:this.unput(b.yytext),this.popState(),this.begin("com");break;case 22:return this.popState(),14;case 23:return 48;case 24:return 73;case 25:return 72;case 26:return 72;case 27:return 87;case 28:break;case 29:return this.popState(),54;case 30:return this.popState(),33;case 31:return b.yytext=e(1,2).replace(/\\"/g,'"'),80;case 32:return b.yytext=e(1,2).replace(/\\'/g,"'"),80;case 33:return 85;case 34:return 82;case 35:return 82;case 36:return 83;case 37:return 84;case 38:return 81;case 39:return 75;case 40:return 77;case 41:return 72;case 42:return b.yytext=b.yytext.replace(/\\([\\\]])/g,"$1"),72;case 43:return"INVALID";case 44:return 5}},a.rules=[/^(?:[^\x00]*?(?=(\{\{)))/,/^(?:[^\x00]+)/,/^(?:[^\x00]{2,}?(?=(\{\{|\\\{\{|\\\\\{\{|$)))/,/^(?:\{\{\{\{(?=[^\/]))/,/^(?:\{\{\{\{\/[^\s!"#%-,\.\/;->@\[-\^`\{-~]+(?=[=}\s\/.])\}\}\}\})/,/^(?:[^\x00]*?(?=(\{\{\{\{)))/,/^(?:[\s\S]*?--(~)?\}\})/,/^(?:\()/,/^(?:\))/,/^(?:\{\{\{\{)/,/^(?:\}\}\}\})/,/^(?:\{\{(~)?>)/,/^(?:\{\{(~)?#>)/,/^(?:\{\{(~)?#\*?)/,/^(?:\{\{(~)?\/)/,/^(?:\{\{(~)?\^\s*(~)?\}\})/,/^(?:\{\{(~)?\s*else\s*(~)?\}\})/,/^(?:\{\{(~)?\^)/,/^(?:\{\{(~)?\s*else\b)/,/^(?:\{\{(~)?\{)/,/^(?:\{\{(~)?&)/,/^(?:\{\{(~)?!--)/,/^(?:\{\{(~)?![\s\S]*?\}\})/,/^(?:\{\{(~)?\*?)/,/^(?:=)/,/^(?:\.\.)/,/^(?:\.(?=([=~}\s\/.)|])))/,/^(?:[\/.])/,/^(?:\s+)/,/^(?:\}(~)?\}\})/,/^(?:(~)?\}\})/,/^(?:"(\\["]|[^"])*")/,/^(?:'(\\[']|[^'])*')/,/^(?:@)/,/^(?:true(?=([~}\s)])))/,/^(?:false(?=([~}\s)])))/,/^(?:undefined(?=([~}\s)])))/,/^(?:null(?=([~}\s)])))/,/^(?:-?[0-9]+(?:\.[0-9]+)?(?=([~}\s)])))/,/^(?:as\s+\|)/,/^(?:\|)/,/^(?:([^\s!"#%-,\.\/;->@\[-\^`\{-~]+(?=([=~}\s\/.)|]))))/,/^(?:\[(\\\]|[^\]])*\])/,/^(?:.)/,/^(?:$)/],a.conditions={mu:{rules:[7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44],inclusive:!1},emu:{rules:[2],inclusive:!1},com:{rules:[6],inclusive:!1},raw:{rules:[3,4,5],inclusive:!1},INITIAL:{rules:[0,1,44],inclusive:!0}},a}();return b.lexer=c,a.prototype=b,b.Parser=a,new a}();b["default"]=c,a.exports=b["default"]},function(a,b,c){"use strict";function d(){var a=arguments.length<=0||void 0===arguments[0]?{}:arguments[0];this.options=a}function e(a,b,c){void 0===b&&(b=a.length);var d=a[b-1],e=a[b-2];return d?"ContentStatement"===d.type?(e||!c?/\r?\n\s*?$/:/(^|\r?\n)\s*?$/).test(d.original):void 0:c}function f(a,b,c){void 0===b&&(b=-1);var d=a[b+1],e=a[b+2];return d?"ContentStatement"===d.type?(e||!c?/^\s*?\r?\n/:/^\s*?(\r?\n|$)/).test(d.original):void 0:c}function g(a,b,c){var d=a[null==b?0:b+1];if(d&&"ContentStatement"===d.type&&(c||!d.rightStripped)){var e=d.value;d.value=d.value.replace(c?/^\s+/:/^[ \t]*\r?\n?/,""),d.rightStripped=d.value!==e}}function h(a,b,c){var d=a[null==b?a.length-1:b-1];if(d&&"ContentStatement"===d.type&&(c||!d.leftStripped)){var e=d.value;return d.value=d.value.replace(c?/\s+$/:/[ \t]+$/,""),d.leftStripped=d.value!==e,d.leftStripped}}var i=c(1)["default"];b.__esModule=!0;var j=c(39),k=i(j);d.prototype=new k["default"],d.prototype.Program=function(a){var b=!this.options.ignoreStandalone,c=!this.isRootSeen;this.isRootSeen=!0;for(var d=a.body,i=0,j=d.length;i<j;i++){var k=d[i],l=this.accept(k);if(l){var m=e(d,i,c),n=f(d,i,c),o=l.openStandalone&&m,p=l.closeStandalone&&n,q=l.inlineStandalone&&m&&n;l.close&&g(d,i,!0),l.open&&h(d,i,!0),b&&q&&(g(d,i),h(d,i)&&"PartialStatement"===k.type&&(k.indent=/([ \t]+$)/.exec(d[i-1].original)[1])),b&&o&&(g((k.program||k.inverse).body),h(d,i)),b&&p&&(g(d,i),h((k.inverse||k.program).body))}}return a},d.prototype.BlockStatement=d.prototype.DecoratorBlock=d.prototype.PartialBlockStatement=function(a){this.accept(a.program),this.accept(a.inverse);var b=a.program||a.inverse,c=a.program&&a.inverse,d=c,i=c;if(c&&c.chained)for(d=c.body[0].program;i.chained;)i=i.body[i.body.length-1].program;var j={open:a.openStrip.open,close:a.closeStrip.close,openStandalone:f(b.body),closeStandalone:e((d||b).body)};if(a.openStrip.close&&g(b.body,null,!0),c){var k=a.inverseStrip;k.open&&h(b.body,null,!0),k.close&&g(d.body,null,!0),a.closeStrip.open&&h(i.body,null,!0),!this.options.ignoreStandalone&&e(b.body)&&f(d.body)&&(h(b.body),g(d.body))}else a.closeStrip.open&&h(b.body,null,!0);return j},d.prototype.Decorator=d.prototype.MustacheStatement=function(a){return a.strip},d.prototype.PartialStatement=d.prototype.CommentStatement=function(a){var b=a.strip||{};return{inlineStandalone:!0,open:b.open,close:b.close}},b["default"]=d,a.exports=b["default"]},function(a,b,c){"use strict";function d(){this.parents=[]}function e(a){this.acceptRequired(a,"path"),this.acceptArray(a.params),this.acceptKey(a,"hash")}function f(a){e.call(this,a),this.acceptKey(a,"program"),this.acceptKey(a,"inverse")}function g(a){this.acceptRequired(a,"name"),this.acceptArray(a.params),this.acceptKey(a,"hash")}var h=c(1)["default"];b.__esModule=!0;var i=c(6),j=h(i);d.prototype={constructor:d,mutating:!1,acceptKey:function(a,b){var c=this.accept(a[b]);if(this.mutating){if(c&&!d.prototype[c.type])throw new j["default"]('Unexpected node type "'+c.type+'" found when accepting '+b+" on "+a.type);a[b]=c}},acceptRequired:function(a,b){if(this.acceptKey(a,b),!a[b])throw new j["default"](a.type+" requires "+b)},acceptArray:function(a){for(var b=0,c=a.length;b<c;b++)this.acceptKey(a,b),a[b]||(a.splice(b,1),b--,c--)},accept:function(a){if(a){if(!this[a.type])throw new j["default"]("Unknown type: "+a.type,a);this.current&&this.parents.unshift(this.current),this.current=a;var b=this[a.type](a);return this.current=this.parents.shift(),!this.mutating||b?b:b!==!1?a:void 0}},Program:function(a){this.acceptArray(a.body)},MustacheStatement:e,Decorator:e,BlockStatement:f,DecoratorBlock:f,PartialStatement:g,PartialBlockStatement:function(a){g.call(this,a),this.acceptKey(a,"program")},ContentStatement:function(){},CommentStatement:function(){},SubExpression:e,PathExpression:function(){},StringLiteral:function(){},NumberLiteral:function(){},BooleanLiteral:function(){},UndefinedLiteral:function(){},NullLiteral:function(){},Hash:function(a){this.acceptArray(a.pairs)},HashPair:function(a){this.acceptRequired(a,"value")}},b["default"]=d,a.exports=b["default"]},function(a,b,c){"use strict";function d(a,b){if(b=b.path?b.path.original:b,a.path.original!==b){var c={loc:a.path.loc};throw new q["default"](a.path.original+" doesn't match "+b,c)}}function e(a,b){this.source=a,this.start={line:b.first_line,column:b.first_column},this.end={line:b.last_line,column:b.last_column}}function f(a){return/^\[.*\]$/.test(a)?a.substr(1,a.length-2):a}function g(a,b){return{open:"~"===a.charAt(2),close:"~"===b.charAt(b.length-3)}}function h(a){return a.replace(/^\{\{~?\!-?-?/,"").replace(/-?-?~?\}\}$/,"")}function i(a,b,c){c=this.locInfo(c);for(var d=a?"@":"",e=[],f=0,g="",h=0,i=b.length;h<i;h++){var j=b[h].part,k=b[h].original!==j;if(d+=(b[h].separator||"")+j,k||".."!==j&&"."!==j&&"this"!==j)e.push(j);else{if(e.length>0)throw new q["default"]("Invalid path: "+d,{loc:c});".."===j&&(f++,g+="../")}}return{type:"PathExpression",data:a,depth:f,parts:e,original:d,loc:c}}function j(a,b,c,d,e,f){var g=d.charAt(3)||d.charAt(2),h="{"!==g&&"&"!==g,i=/\*/.test(d);return{type:i?"Decorator":"MustacheStatement",path:a,params:b,hash:c,escaped:h,strip:e,loc:this.locInfo(f)}}function k(a,b,c,e){d(a,c),e=this.locInfo(e);var f={type:"Program",body:b,strip:{},loc:e};return{type:"BlockStatement",path:a.path,params:a.params,hash:a.hash,program:f,openStrip:{},inverseStrip:{},closeStrip:{},loc:e}}function l(a,b,c,e,f,g){e&&e.path&&d(a,e);var h=/\*/.test(a.open);b.blockParams=a.blockParams;var i=void 0,j=void 0;if(c){if(h)throw new q["default"]("Unexpected inverse block on decorator",c);c.chain&&(c.program.body[0].closeStrip=e.strip),j=c.strip,i=c.program}return f&&(f=i,i=b,b=f),{type:h?"DecoratorBlock":"BlockStatement",path:a.path,params:a.params,hash:a.hash,program:b,inverse:i,openStrip:a.strip,inverseStrip:j,closeStrip:e&&e.strip,loc:this.locInfo(g)}}function m(a,b){if(!b&&a.length){var c=a[0].loc,d=a[a.length-1].loc;c&&d&&(b={source:c.source,start:{line:c.start.line,column:c.start.column},end:{line:d.end.line,column:d.end.column}})}return{type:"Program",body:a,strip:{},loc:b}}function n(a,b,c,e){return d(a,c),{type:"PartialBlockStatement",name:a.path,params:a.params,hash:a.hash,program:b,openStrip:a.strip,closeStrip:c&&c.strip,loc:this.locInfo(e)}}var o=c(1)["default"];b.__esModule=!0,b.SourceLocation=e,b.id=f,b.stripFlags=g,b.stripComment=h,b.preparePath=i,b.prepareMustache=j,b.prepareRawBlock=k,b.prepareBlock=l,b.prepareProgram=m,b.preparePartialBlock=n;var p=c(6),q=o(p)},function(a,b,c){"use strict";function d(){}function e(a,b,c){if(null==a||"string"!=typeof a&&"Program"!==a.type)throw new k["default"]("You must pass a string or Handlebars AST to Handlebars.precompile. You passed "+a);b=b||{},"data"in b||(b.data=!0),b.compat&&(b.useDepths=!0);var d=c.parse(a,b),e=(new c.Compiler).compile(d,b);return(new c.JavaScriptCompiler).compile(e,b)}function f(a,b,c){function d(){var d=c.parse(a,b),e=(new c.Compiler).compile(d,b),f=(new c.JavaScriptCompiler).compile(e,b,void 0,!0);return c.template(f)}function e(a,b){return f||(f=d()),f.call(this,a,b)}if(void 0===b&&(b={}),null==a||"string"!=typeof a&&"Program"!==a.type)throw new k["default"]("You must pass a string or Handlebars AST to Handlebars.compile. You passed "+a);b=l.extend({},b),"data"in b||(b.data=!0),b.compat&&(b.useDepths=!0);var f=void 0;return e._setup=function(a){return f||(f=d()),f._setup(a)},e._child=function(a,b,c,e){return f||(f=d()),f._child(a,b,c,e)},e}function g(a,b){if(a===b)return!0;if(l.isArray(a)&&l.isArray(b)&&a.length===b.length){for(var c=0;c<a.length;c++)if(!g(a[c],b[c]))return!1;return!0}}function h(a){if(!a.path.parts){var b=a.path;a.path={type:"PathExpression",data:!1,depth:0,parts:[b.original+""],original:b.original+"",loc:b.loc}}}var i=c(1)["default"];b.__esModule=!0,b.Compiler=d,b.precompile=e,b.compile=f;var j=c(6),k=i(j),l=c(5),m=c(35),n=i(m),o=[].slice;d.prototype={compiler:d,equals:function(a){var b=this.opcodes.length;if(a.opcodes.length!==b)return!1;for(var c=0;c<b;c++){var d=this.opcodes[c],e=a.opcodes[c];if(d.opcode!==e.opcode||!g(d.args,e.args))return!1}b=this.children.length;for(var c=0;c<b;c++)if(!this.children[c].equals(a.children[c]))return!1;return!0},guid:0,compile:function(a,b){this.sourceNode=[],this.opcodes=[],this.children=[],this.options=b,this.stringParams=b.stringParams,this.trackIds=b.trackIds,b.blockParams=b.blockParams||[];var c=b.knownHelpers;if(b.knownHelpers={helperMissing:!0,blockHelperMissing:!0,each:!0,"if":!0,unless:!0,"with":!0,log:!0,lookup:!0},c)for(var d in c)d in c&&(this.options.knownHelpers[d]=c[d]);return this.accept(a)},compileProgram:function(a){var b=new this.compiler,c=b.compile(a,this.options),d=this.guid++;return this.usePartial=this.usePartial||c.usePartial,this.children[d]=c,this.useDepths=this.useDepths||c.useDepths,d},accept:function(a){if(!this[a.type])throw new k["default"]("Unknown type: "+a.type,a);this.sourceNode.unshift(a);var b=this[a.type](a);return this.sourceNode.shift(),b},Program:function(a){this.options.blockParams.unshift(a.blockParams);for(var b=a.body,c=b.length,d=0;d<c;d++)this.accept(b[d]);return this.options.blockParams.shift(),this.isSimple=1===c,this.blockParams=a.blockParams?a.blockParams.length:0,this},BlockStatement:function(a){h(a);var b=a.program,c=a.inverse;b=b&&this.compileProgram(b),c=c&&this.compileProgram(c);var d=this.classifySexpr(a);"helper"===d?this.helperSexpr(a,b,c):"simple"===d?(this.simpleSexpr(a),this.opcode("pushProgram",b),this.opcode("pushProgram",c),this.opcode("emptyHash"),this.opcode("blockValue",a.path.original)):(this.ambiguousSexpr(a,b,c),this.opcode("pushProgram",b),this.opcode("pushProgram",c),this.opcode("emptyHash"),this.opcode("ambiguousBlockValue")),this.opcode("append")},DecoratorBlock:function(a){var b=a.program&&this.compileProgram(a.program),c=this.setupFullMustacheParams(a,b,void 0),d=a.path;this.useDecorators=!0,this.opcode("registerDecorator",c.length,d.original)},PartialStatement:function(a){this.usePartial=!0;var b=a.program;b&&(b=this.compileProgram(a.program));var c=a.params;if(c.length>1)throw new k["default"]("Unsupported number of partial arguments: "+c.length,a);c.length||(this.options.explicitPartialContext?this.opcode("pushLiteral","undefined"):c.push({type:"PathExpression",parts:[],depth:0}));var d=a.name.original,e="SubExpression"===a.name.type;e&&this.accept(a.name),this.setupFullMustacheParams(a,b,void 0,!0);var f=a.indent||"";this.options.preventIndent&&f&&(this.opcode("appendContent",f),f=""),this.opcode("invokePartial",e,d,f),this.opcode("append")},PartialBlockStatement:function(a){this.PartialStatement(a)},MustacheStatement:function(a){this.SubExpression(a),a.escaped&&!this.options.noEscape?this.opcode("appendEscaped"):this.opcode("append")},Decorator:function(a){this.DecoratorBlock(a)},ContentStatement:function(a){a.value&&this.opcode("appendContent",a.value)},CommentStatement:function(){},SubExpression:function(a){h(a);var b=this.classifySexpr(a);"simple"===b?this.simpleSexpr(a):"helper"===b?this.helperSexpr(a):this.ambiguousSexpr(a)},ambiguousSexpr:function(a,b,c){var d=a.path,e=d.parts[0],f=null!=b||null!=c;this.opcode("getContext",d.depth),this.opcode("pushProgram",b),this.opcode("pushProgram",c),d.strict=!0,this.accept(d),this.opcode("invokeAmbiguous",e,f)},simpleSexpr:function(a){var b=a.path;b.strict=!0,this.accept(b),this.opcode("resolvePossibleLambda")},helperSexpr:function(a,b,c){var d=this.setupFullMustacheParams(a,b,c),e=a.path,f=e.parts[0];if(this.options.knownHelpers[f])this.opcode("invokeKnownHelper",d.length,f);else{if(this.options.knownHelpersOnly)throw new k["default"]("You specified knownHelpersOnly, but used the unknown helper "+f,a);e.strict=!0,e.falsy=!0,this.accept(e),this.opcode("invokeHelper",d.length,e.original,n["default"].helpers.simpleId(e))}},PathExpression:function(a){this.addDepth(a.depth),this.opcode("getContext",a.depth);var b=a.parts[0],c=n["default"].helpers.scopedId(a),d=!a.depth&&!c&&this.blockParamIndex(b);d?this.opcode("lookupBlockParam",d,a.parts):b?a.data?(this.options.data=!0,this.opcode("lookupData",a.depth,a.parts,a.strict)):this.opcode("lookupOnContext",a.parts,a.falsy,a.strict,c):this.opcode("pushContext")},StringLiteral:function(a){this.opcode("pushString",a.value)},NumberLiteral:function(a){this.opcode("pushLiteral",a.value)},BooleanLiteral:function(a){this.opcode("pushLiteral",a.value)},UndefinedLiteral:function(){this.opcode("pushLiteral","undefined")},NullLiteral:function(){this.opcode("pushLiteral","null")},Hash:function(a){var b=a.pairs,c=0,d=b.length;for(this.opcode("pushHash");c<d;c++)this.pushParam(b[c].value);for(;c--;)this.opcode("assignToHash",b[c].key);this.opcode("popHash")},opcode:function(a){this.opcodes.push({opcode:a,args:o.call(arguments,1),loc:this.sourceNode[0].loc})},addDepth:function(a){a&&(this.useDepths=!0)},classifySexpr:function(a){var b=n["default"].helpers.simpleId(a.path),c=b&&!!this.blockParamIndex(a.path.parts[0]),d=!c&&n["default"].helpers.helperExpression(a),e=!c&&(d||b);if(e&&!d){var f=a.path.parts[0],g=this.options;g.knownHelpers[f]?d=!0:g.knownHelpersOnly&&(e=!1)}return d?"helper":e?"ambiguous":"simple"},pushParams:function(a){for(var b=0,c=a.length;b<c;b++)this.pushParam(a[b])},pushParam:function(a){var b=null!=a.value?a.value:a.original||"";if(this.stringParams)b.replace&&(b=b.replace(/^(\.?\.\/)*/g,"").replace(/\//g,".")),a.depth&&this.addDepth(a.depth),this.opcode("getContext",a.depth||0),this.opcode("pushStringParam",b,a.type),"SubExpression"===a.type&&this.accept(a);else{if(this.trackIds){var c=void 0;if(!a.parts||n["default"].helpers.scopedId(a)||a.depth||(c=this.blockParamIndex(a.parts[0])),c){var d=a.parts.slice(1).join(".");this.opcode("pushId","BlockParam",c,d)}else b=a.original||b,b.replace&&(b=b.replace(/^this(?:\.|$)/,"").replace(/^\.\//,"").replace(/^\.$/,"")),this.opcode("pushId",a.type,b)}this.accept(a)}},setupFullMustacheParams:function(a,b,c,d){var e=a.params;return this.pushParams(e),this.opcode("pushProgram",b),this.opcode("pushProgram",c),a.hash?this.accept(a.hash):this.opcode("emptyHash",d),e},blockParamIndex:function(a){for(var b=0,c=this.options.blockParams.length;b<c;b++){var d=this.options.blockParams[b],e=d&&l.indexOf(d,a);if(d&&e>=0)return[b,e]}}}},function(a,b,c){"use strict";function d(a){this.value=a}function e(){}function f(a,b,c,d){var e=b.popStack(),f=0,g=c.length;for(a&&g--;f<g;f++)e=b.nameLookup(e,c[f],d);return a?[b.aliasable("container.strict"),"(",e,", ",b.quotedString(c[f]),")"]:e}var g=c(1)["default"];b.__esModule=!0;var h=c(4),i=c(6),j=g(i),k=c(5),l=c(43),m=g(l);e.prototype={nameLookup:function(a,b){return e.isValidJavaScriptVariableName(b)?[a,".",b]:[a,"[",JSON.stringify(b),"]"]},depthedLookup:function(a){return[this.aliasable("container.lookup"),'(depths, "',a,'")']},compilerInfo:function(){var a=h.COMPILER_REVISION,b=h.REVISION_CHANGES[a];return[a,b]},appendToBuffer:function(a,b,c){return k.isArray(a)||(a=[a]),a=this.source.wrap(a,b),this.environment.isSimple?["return ",a,";"]:c?["buffer += ",a,";"]:(a.appendToBuffer=!0,a)},initializeBuffer:function(){return this.quotedString("")},compile:function(a,b,c,d){this.environment=a,this.options=b,this.stringParams=this.options.stringParams,this.trackIds=this.options.trackIds,this.precompile=!d,this.name=this.environment.name,this.isChild=!!c,this.context=c||{decorators:[],programs:[],environments:[]},this.preamble(),this.stackSlot=0,this.stackVars=[],this.aliases={},this.registers={list:[]},this.hashes=[],this.compileStack=[],this.inlineStack=[],this.blockParams=[],this.compileChildren(a,b),this.useDepths=this.useDepths||a.useDepths||a.useDecorators||this.options.compat,this.useBlockParams=this.useBlockParams||a.useBlockParams;var e=a.opcodes,f=void 0,g=void 0,h=void 0,i=void 0;for(h=0,i=e.length;h<i;h++)f=e[h],this.source.currentLocation=f.loc,g=g||f.loc,this[f.opcode].apply(this,f.args);if(this.source.currentLocation=g,this.pushSource(""),this.stackSlot||this.inlineStack.length||this.compileStack.length)throw new j["default"]("Compile completed with content left on stack");this.decorators.isEmpty()?this.decorators=void 0:(this.useDecorators=!0,this.decorators.prepend("var decorators = container.decorators;\n"),this.decorators.push("return fn;"),d?this.decorators=Function.apply(this,["fn","props","container","depth0","data","blockParams","depths",this.decorators.merge()]):(this.decorators.prepend("function(fn, props, container, depth0, data, blockParams, depths) {\n"),this.decorators.push("}\n"),this.decorators=this.decorators.merge()));var k=this.createFunctionContext(d);if(this.isChild)return k;var l={compiler:this.compilerInfo(),main:k};this.decorators&&(l.main_d=this.decorators,l.useDecorators=!0);var m=this.context,n=m.programs,o=m.decorators;for(h=0,i=n.length;h<i;h++)n[h]&&(l[h]=n[h],o[h]&&(l[h+"_d"]=o[h],l.useDecorators=!0));return this.environment.usePartial&&(l.usePartial=!0),this.options.data&&(l.useData=!0),this.useDepths&&(l.useDepths=!0),this.useBlockParams&&(l.useBlockParams=!0),this.options.compat&&(l.compat=!0),d?l.compilerOptions=this.options:(l.compiler=JSON.stringify(l.compiler),this.source.currentLocation={start:{line:1,column:0}},l=this.objectLiteral(l),b.srcName?(l=l.toStringWithSourceMap({file:b.destName}),l.map=l.map&&l.map.toString()):l=l.toString()),l},preamble:function(){this.lastContext=0,this.source=new m["default"](this.options.srcName),this.decorators=new m["default"](this.options.srcName)},createFunctionContext:function(a){var b="",c=this.stackVars.concat(this.registers.list);c.length>0&&(b+=", "+c.join(", "));var d=0;for(var e in this.aliases){var f=this.aliases[e];this.aliases.hasOwnProperty(e)&&f.children&&f.referenceCount>1&&(b+=", alias"+ ++d+"="+e,f.children[0]="alias"+d)}var g=["container","depth0","helpers","partials","data"];(this.useBlockParams||this.useDepths)&&g.push("blockParams"),this.useDepths&&g.push("depths");var h=this.mergeSource(b);return a?(g.push(h),Function.apply(this,g)):this.source.wrap(["function(",g.join(","),") {\n  ",h,"}"])},mergeSource:function(a){var b=this.environment.isSimple,c=!this.forceBuffer,d=void 0,e=void 0,f=void 0,g=void 0;return this.source.each(function(a){a.appendToBuffer?(f?a.prepend("  + "):f=a,g=a):(f&&(e?f.prepend("buffer += "):d=!0,g.add(";"),f=g=void 0),e=!0,b||(c=!1))}),c?f?(f.prepend("return "),g.add(";")):e||this.source.push('return "";'):(a+=", buffer = "+(d?"":this.initializeBuffer()),f?(f.prepend("return buffer + "),g.add(";")):this.source.push("return buffer;")),a&&this.source.prepend("var "+a.substring(2)+(d?"":";\n")),this.source.merge()},blockValue:function(a){var b=this.aliasable("helpers.blockHelperMissing"),c=[this.contextName(0)];this.setupHelperArgs(a,0,c);var d=this.popStack();c.splice(1,0,d),this.push(this.source.functionCall(b,"call",c))},ambiguousBlockValue:function(){var a=this.aliasable("helpers.blockHelperMissing"),b=[this.contextName(0)];this.setupHelperArgs("",0,b,!0),this.flushInline();var c=this.topStack();b.splice(1,0,c),this.pushSource(["if (!",this.lastHelper,") { ",c," = ",this.source.functionCall(a,"call",b),"}"])},appendContent:function(a){this.pendingContent?a=this.pendingContent+a:this.pendingLocation=this.source.currentLocation,this.pendingContent=a},append:function(){if(this.isInline())this.replaceStack(function(a){return[" != null ? ",a,' : ""']}),this.pushSource(this.appendToBuffer(this.popStack()));else{var a=this.popStack();this.pushSource(["if (",a," != null) { ",this.appendToBuffer(a,void 0,!0)," }"]),this.environment.isSimple&&this.pushSource(["else { ",this.appendToBuffer("''",void 0,!0)," }"])}},appendEscaped:function(){this.pushSource(this.appendToBuffer([this.aliasable("container.escapeExpression"),"(",this.popStack(),")"]))},getContext:function(a){this.lastContext=a},pushContext:function(){this.pushStackLiteral(this.contextName(this.lastContext))},lookupOnContext:function(a,b,c,d){var e=0;d||!this.options.compat||this.lastContext?this.pushContext():this.push(this.depthedLookup(a[e++])),this.resolvePath("context",a,e,b,c)},lookupBlockParam:function(a,b){this.useBlockParams=!0,this.push(["blockParams[",a[0],"][",a[1],"]"]),this.resolvePath("context",b,1)},lookupData:function(a,b,c){a?this.pushStackLiteral("container.data(data, "+a+")"):this.pushStackLiteral("data"),this.resolvePath("data",b,0,!0,c)},resolvePath:function(a,b,c,d,e){var g=this;if(this.options.strict||this.options.assumeObjects)return void this.push(f(this.options.strict&&e,this,b,a));for(var h=b.length;c<h;c++)this.replaceStack(function(e){
+var f=g.nameLookup(e,b[c],a);return d?[" && ",f]:[" != null ? ",f," : ",e]})},resolvePossibleLambda:function(){this.push([this.aliasable("container.lambda"),"(",this.popStack(),", ",this.contextName(0),")"])},pushStringParam:function(a,b){this.pushContext(),this.pushString(b),"SubExpression"!==b&&("string"==typeof a?this.pushString(a):this.pushStackLiteral(a))},emptyHash:function(a){this.trackIds&&this.push("{}"),this.stringParams&&(this.push("{}"),this.push("{}")),this.pushStackLiteral(a?"undefined":"{}")},pushHash:function(){this.hash&&this.hashes.push(this.hash),this.hash={values:[],types:[],contexts:[],ids:[]}},popHash:function(){var a=this.hash;this.hash=this.hashes.pop(),this.trackIds&&this.push(this.objectLiteral(a.ids)),this.stringParams&&(this.push(this.objectLiteral(a.contexts)),this.push(this.objectLiteral(a.types))),this.push(this.objectLiteral(a.values))},pushString:function(a){this.pushStackLiteral(this.quotedString(a))},pushLiteral:function(a){this.pushStackLiteral(a)},pushProgram:function(a){null!=a?this.pushStackLiteral(this.programExpression(a)):this.pushStackLiteral(null)},registerDecorator:function(a,b){var c=this.nameLookup("decorators",b,"decorator"),d=this.setupHelperArgs(b,a);this.decorators.push(["fn = ",this.decorators.functionCall(c,"",["fn","props","container",d])," || fn;"])},invokeHelper:function(a,b,c){var d=this.popStack(),e=this.setupHelper(a,b),f=c?[e.name," || "]:"",g=["("].concat(f,d);this.options.strict||g.push(" || ",this.aliasable("helpers.helperMissing")),g.push(")"),this.push(this.source.functionCall(g,"call",e.callParams))},invokeKnownHelper:function(a,b){var c=this.setupHelper(a,b);this.push(this.source.functionCall(c.name,"call",c.callParams))},invokeAmbiguous:function(a,b){this.useRegister("helper");var c=this.popStack();this.emptyHash();var d=this.setupHelper(0,a,b),e=this.lastHelper=this.nameLookup("helpers",a,"helper"),f=["(","(helper = ",e," || ",c,")"];this.options.strict||(f[0]="(helper = ",f.push(" != null ? helper : ",this.aliasable("helpers.helperMissing"))),this.push(["(",f,d.paramsInit?["),(",d.paramsInit]:[],"),","(typeof helper === ",this.aliasable('"function"')," ? ",this.source.functionCall("helper","call",d.callParams)," : helper))"])},invokePartial:function(a,b,c){var d=[],e=this.setupParams(b,1,d);a&&(b=this.popStack(),delete e.name),c&&(e.indent=JSON.stringify(c)),e.helpers="helpers",e.partials="partials",e.decorators="container.decorators",a?d.unshift(b):d.unshift(this.nameLookup("partials",b,"partial")),this.options.compat&&(e.depths="depths"),e=this.objectLiteral(e),d.push(e),this.push(this.source.functionCall("container.invokePartial","",d))},assignToHash:function(a){var b=this.popStack(),c=void 0,d=void 0,e=void 0;this.trackIds&&(e=this.popStack()),this.stringParams&&(d=this.popStack(),c=this.popStack());var f=this.hash;c&&(f.contexts[a]=c),d&&(f.types[a]=d),e&&(f.ids[a]=e),f.values[a]=b},pushId:function(a,b,c){"BlockParam"===a?this.pushStackLiteral("blockParams["+b[0]+"].path["+b[1]+"]"+(c?" + "+JSON.stringify("."+c):"")):"PathExpression"===a?this.pushString(b):"SubExpression"===a?this.pushStackLiteral("true"):this.pushStackLiteral("null")},compiler:e,compileChildren:function(a,b){for(var c=a.children,d=void 0,e=void 0,f=0,g=c.length;f<g;f++){d=c[f],e=new this.compiler;var h=this.matchExistingProgram(d);if(null==h){this.context.programs.push("");var i=this.context.programs.length;d.index=i,d.name="program"+i,this.context.programs[i]=e.compile(d,b,this.context,!this.precompile),this.context.decorators[i]=e.decorators,this.context.environments[i]=d,this.useDepths=this.useDepths||e.useDepths,this.useBlockParams=this.useBlockParams||e.useBlockParams,d.useDepths=this.useDepths,d.useBlockParams=this.useBlockParams}else d.index=h.index,d.name="program"+h.index,this.useDepths=this.useDepths||h.useDepths,this.useBlockParams=this.useBlockParams||h.useBlockParams}},matchExistingProgram:function(a){for(var b=0,c=this.context.environments.length;b<c;b++){var d=this.context.environments[b];if(d&&d.equals(a))return d}},programExpression:function(a){var b=this.environment.children[a],c=[b.index,"data",b.blockParams];return(this.useBlockParams||this.useDepths)&&c.push("blockParams"),this.useDepths&&c.push("depths"),"container.program("+c.join(", ")+")"},useRegister:function(a){this.registers[a]||(this.registers[a]=!0,this.registers.list.push(a))},push:function(a){return a instanceof d||(a=this.source.wrap(a)),this.inlineStack.push(a),a},pushStackLiteral:function(a){this.push(new d(a))},pushSource:function(a){this.pendingContent&&(this.source.push(this.appendToBuffer(this.source.quotedString(this.pendingContent),this.pendingLocation)),this.pendingContent=void 0),a&&this.source.push(a)},replaceStack:function(a){var b=["("],c=void 0,e=void 0,f=void 0;if(!this.isInline())throw new j["default"]("replaceStack on non-inline");var g=this.popStack(!0);if(g instanceof d)c=[g.value],b=["(",c],f=!0;else{e=!0;var h=this.incrStack();b=["((",this.push(h)," = ",g,")"],c=this.topStack()}var i=a.call(this,c);f||this.popStack(),e&&this.stackSlot--,this.push(b.concat(i,")"))},incrStack:function(){return this.stackSlot++,this.stackSlot>this.stackVars.length&&this.stackVars.push("stack"+this.stackSlot),this.topStackName()},topStackName:function(){return"stack"+this.stackSlot},flushInline:function(){var a=this.inlineStack;this.inlineStack=[];for(var b=0,c=a.length;b<c;b++){var e=a[b];if(e instanceof d)this.compileStack.push(e);else{var f=this.incrStack();this.pushSource([f," = ",e,";"]),this.compileStack.push(f)}}},isInline:function(){return this.inlineStack.length},popStack:function(a){var b=this.isInline(),c=(b?this.inlineStack:this.compileStack).pop();if(!a&&c instanceof d)return c.value;if(!b){if(!this.stackSlot)throw new j["default"]("Invalid stack pop");this.stackSlot--}return c},topStack:function(){var a=this.isInline()?this.inlineStack:this.compileStack,b=a[a.length-1];return b instanceof d?b.value:b},contextName:function(a){return this.useDepths&&a?"depths["+a+"]":"depth"+a},quotedString:function(a){return this.source.quotedString(a)},objectLiteral:function(a){return this.source.objectLiteral(a)},aliasable:function(a){var b=this.aliases[a];return b?(b.referenceCount++,b):(b=this.aliases[a]=this.source.wrap(a),b.aliasable=!0,b.referenceCount=1,b)},setupHelper:function(a,b,c){var d=[],e=this.setupHelperArgs(b,a,d,c),f=this.nameLookup("helpers",b,"helper"),g=this.aliasable(this.contextName(0)+" != null ? "+this.contextName(0)+" : (container.nullContext || {})");return{params:d,paramsInit:e,name:f,callParams:[g].concat(d)}},setupParams:function(a,b,c){var d={},e=[],f=[],g=[],h=!c,i=void 0;h&&(c=[]),d.name=this.quotedString(a),d.hash=this.popStack(),this.trackIds&&(d.hashIds=this.popStack()),this.stringParams&&(d.hashTypes=this.popStack(),d.hashContexts=this.popStack());var j=this.popStack(),k=this.popStack();(k||j)&&(d.fn=k||"container.noop",d.inverse=j||"container.noop");for(var l=b;l--;)i=this.popStack(),c[l]=i,this.trackIds&&(g[l]=this.popStack()),this.stringParams&&(f[l]=this.popStack(),e[l]=this.popStack());return h&&(d.args=this.source.generateArray(c)),this.trackIds&&(d.ids=this.source.generateArray(g)),this.stringParams&&(d.types=this.source.generateArray(f),d.contexts=this.source.generateArray(e)),this.options.data&&(d.data="data"),this.useBlockParams&&(d.blockParams="blockParams"),d},setupHelperArgs:function(a,b,c,d){var e=this.setupParams(a,b,c);return e=this.objectLiteral(e),d?(this.useRegister("options"),c.push("options"),["options=",e]):c?(c.push(e),""):e}},function(){for(var a="break else new var case finally return void catch for switch while continue function this with default if throw delete in try do instanceof typeof abstract enum int short boolean export interface static byte extends long super char final native synchronized class float package throws const goto private transient debugger implements protected volatile double import public let yield await null true false".split(" "),b=e.RESERVED_WORDS={},c=0,d=a.length;c<d;c++)b[a[c]]=!0}(),e.isValidJavaScriptVariableName=function(a){return!e.RESERVED_WORDS[a]&&/^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(a)},b["default"]=e,a.exports=b["default"]},function(a,b,c){"use strict";function d(a,b,c){if(f.isArray(a)){for(var d=[],e=0,g=a.length;e<g;e++)d.push(b.wrap(a[e],c));return d}return"boolean"==typeof a||"number"==typeof a?a+"":a}function e(a){this.srcFile=a,this.source=[]}b.__esModule=!0;var f=c(5),g=void 0;try{}catch(h){}g||(g=function(a,b,c,d){this.src="",d&&this.add(d)},g.prototype={add:function(a){f.isArray(a)&&(a=a.join("")),this.src+=a},prepend:function(a){f.isArray(a)&&(a=a.join("")),this.src=a+this.src},toStringWithSourceMap:function(){return{code:this.toString()}},toString:function(){return this.src}}),e.prototype={isEmpty:function(){return!this.source.length},prepend:function(a,b){this.source.unshift(this.wrap(a,b))},push:function(a,b){this.source.push(this.wrap(a,b))},merge:function(){var a=this.empty();return this.each(function(b){a.add(["  ",b,"\n"])}),a},each:function(a){for(var b=0,c=this.source.length;b<c;b++)a(this.source[b])},empty:function(){var a=this.currentLocation||{start:{}};return new g(a.start.line,a.start.column,this.srcFile)},wrap:function(a){var b=arguments.length<=1||void 0===arguments[1]?this.currentLocation||{start:{}}:arguments[1];return a instanceof g?a:(a=d(a,this,b),new g(b.start.line,b.start.column,this.srcFile,a))},functionCall:function(a,b,c){return c=this.generateList(c),this.wrap([a,b?"."+b+"(":"(",c,")"])},quotedString:function(a){return'"'+(a+"").replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g,"\\n").replace(/\r/g,"\\r").replace(/\u2028/g,"\\u2028").replace(/\u2029/g,"\\u2029")+'"'},objectLiteral:function(a){var b=[];for(var c in a)if(a.hasOwnProperty(c)){var e=d(a[c],this);"undefined"!==e&&b.push([this.quotedString(c),":",e])}var f=this.generateList(b);return f.prepend("{"),f.add("}"),f},generateList:function(a){for(var b=this.empty(),c=0,e=a.length;c<e;c++)c&&b.add(","),b.add(d(a[c],this));return b},generateArray:function(a){var b=this.generateList(a);return b.prepend("["),b.add("]"),b}},b["default"]=e,a.exports=b["default"]}])});
+(function () {
+	'use strict';
 
-// CodeMirror HTMLHint Integration
-(function(mod) {
-  if (typeof exports == "object" && typeof module == "object") // CommonJS
-    mod(require("../../lib/codemirror"));
-  else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
-  else // Plain browser env
-    mod(CodeMirror);
-})
+	var regex1 = /^Parse error on line ([0-9]+)+:\n([^\n].*)\n([^\n].*)\n(.*)$/;
+	var regex2 = /^(.*) - ([0-9]+):([0-9]+)$/;
 
-(function(CodeMirror) {
-  "use strict";
+	function friendlyMessage(message) {
+		if (message.indexOf("got 'INVALID'") !== -1) return 'invalid Handlebars expression';
+		if (message === "Expecting 'EOF', got 'OPEN_ENDBLOCK'") return 'invalid closing block, check opening block';
+		return message;
+	}
 
-  CodeMirror.registerHelper("lint", "html", function(text) {
-    var found = [], message;
-    if (!window.HTMLHint) return found;
-    var messages = HTMLHint.verify(text, ruleSets);
-    for ( var i = 0; i < messages.length; i++) {
-      message = messages[i];
-      var startLine = message.line -1, endLine = message.line -1, startCol = message.col -1, endCol = message.col;
-      found.push({
-        from: CodeMirror.Pos(startLine, startCol),
-        to: CodeMirror.Pos(endLine, endCol),
-        message: message.message,
-        severity : message.type
-      });
-    }
-    return found;
-  });
-});
+	var parser = function (e) {
+		var parsed = {};
+		if (!e) return;
+		if (typeof e.message !== 'string') return;
 
-// ruleSets for HTMLLint
-var ruleSets = {
-  "tagname-lowercase": true,
-  "attr-lowercase": true,
-  "attr-value-double-quotes": true,
-  "doctype-first": false,
-  "tag-pair": true,
-  "spec-char-escape": true,
-  "id-unique": true,
-  "src-not-empty": true,
-  "attr-no-duplication": true
-};
+		e.message.replace(regex1, function (match, line, code, indicator, message) {
+			parsed.startLine = +line;
+			parsed.startColumn = +indicator.length;
+			parsed.endLine = parsed.startLine;
+			parsed.endColumn = parsed.startColumn + 1;
+			parsed.message = friendlyMessage(message);
+			return '';
+		});
+		e.message.replace(regex2, function(match, message, line, column) {
+			parsed.startLine = +line;
+			parsed.startColumn = +column;
+			parsed.endLine = parsed.startLine;
+			parsed.endColumn = parsed.startColumn + 1;
+			parsed.message = friendlyMessage(message);
+			return '';
+		});
+		return parsed;
+	};
+
+	if ('undefined' !== typeof window) { // eslint-disable-line no-undef
+		window.handlebarsErrorParser = parser; // eslint-disable-line no-undef
+	}
+
+	if ('undefined' !== typeof module) { // eslint-disable-line no-undef
+		exports.parser = parser; // eslint-disable-line no-undef
+	}
+})();
 
 $.fn.editor = function (options) {
 
