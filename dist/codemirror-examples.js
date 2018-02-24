@@ -15353,11 +15353,11 @@ SOFTWARE.
 			}
 
 			// Handlebars linting
-			if (window.Handlebars && window.handlebarsErrorParser) {
+			if (window.Handlebars && window.HandlebarsErrorParser) {
 				try {
 					Handlebars.precompile(text);
 				} catch (e) {
-					parsed = window.handlebarsErrorParser(e);
+					parsed = window.HandlebarsErrorParser(e);
 				}
 
 				if (parsed) {
@@ -19984,7 +19984,7 @@ var f=g.nameLookup(e,b[c],a);return d?[" && ",f]:[" != null ? ",f," : ",e]})},re
 	};
 
 	if ('undefined' !== typeof window) { // eslint-disable-line no-undef
-		window.handlebarsErrorParser = parser; // eslint-disable-line no-undef
+		window.HandlebarsErrorParser = parser; // eslint-disable-line no-undef
 	}
 
 	if ('undefined' !== typeof module) { // eslint-disable-line no-undef

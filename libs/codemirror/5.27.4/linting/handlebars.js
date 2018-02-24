@@ -56,11 +56,11 @@ SOFTWARE.
 			}
 
 			// Handlebars linting
-			if (window.Handlebars && window.handlebarsErrorParser) {
+			if (window.Handlebars && window.HandlebarsErrorParser) {
 				try {
 					Handlebars.precompile(text);
 				} catch (e) {
-					parsed = window.handlebarsErrorParser(e);
+					parsed = window.HandlebarsErrorParser(e);
 				}
 
 				if (parsed) {
