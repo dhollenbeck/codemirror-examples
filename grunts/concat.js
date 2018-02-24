@@ -43,11 +43,15 @@ module.exports = function(grunt) {
 
                 'libs/htmlhint/htmlhint.js',
                 'libs/jshint/jshint.js',
-                //'libs/csslint/csslint.js', // this nukes window.Handlebars????
+                
                 
                 // handlebars linting
                 './node_modules/handlebars/dist/handlebars.min.js',
                 './node_modules/handlebars-error-parser/index.js',
+
+                // Warning: csslint.js must be loaded after Handlebars 
+                // otherwise it removes `window.Handlebars`.
+                'libs/csslint/csslint.js',
 
                 'libs/editor.js'
                
