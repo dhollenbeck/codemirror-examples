@@ -61,17 +61,18 @@
             var cmd = $(this).data('cmd');
             editor.execCommand(cmd);
         });
-		$('#fields a, #helpers a').click(function (e) {
+		$('#fields a, #helpers a, #html a').click(function (e) {
 			e.preventDefault();
-			var lbrace, rbrace, str;
-
-            lbrace = String.fromCharCode(123);
-            rbrace = String.fromCharCode(125);
-			str = $(this).data('cmd') || '';
+			
+            var lbrace = String.fromCharCode(123);
+            var rbrace = String.fromCharCode(125);
+			var str = $(this).data('cmd') || '';
 			str = str.replace(/\[/g, lbrace);
 			str = str.replace(/]/g, rbrace);
 			str = str.replace(/\\n/g, '\n');
 			str = str.replace(/\\t/g, '\t');
+			str = str.replace(/&lt;/g, '<');
+			str = str.replace(/&gt;/g, '>');
 			insertString(editor, str);
         });
 
@@ -156,10 +157,10 @@
                                 <span class="caret"></span></button>
                                 <ul class="dropdown-menu dropdown-menu-right" id="html">
                                     <li class="dropdown-header">Tags</li>
-                                    <li><a href="#"><strong>&lt;h1&gt;your header&lt;/h1&gt;</strong> - large header.</a></li>
-                                    <li><a href="#"><strong>&lt;h2&gt;your header&lt;/h2&gt;</strong> - medimum header.</a></li>
-                                    <li><a href="#"><strong>&lt;p&gt;your text&lt;/p&gt;</strong> - paragraph of text.</a></li>
-                                    <li><a href="#"><strong>&lt;b&gt;your text&lt;/b&gt;</strong> - bold text.</a></li>
+                                    <li><a href="#" data-cmd="&lt;h1&gt;your header&lt;/h1&gt;\n"><strong>&lt;h1&gt;your header&lt;/h1&gt;</strong> - large header.</a></li>
+                                    <li><a href="#" data-cmd="&lt;h2&gt;your header&lt;/h2&gt;\n"><strong>&lt;h2&gt;your header&lt;/h2&gt;</strong> - medimum header.</a></li>
+                                    <li><a href="#" data-cmd="&lt;p&gt;your text&lt;/p&gt;\n"><strong>&lt;p&gt;your text&lt;/p&gt;</strong> - paragraph of text.</a></li>
+                                    <li><a href="#" data-cmd="&lt;b&gt;your text&lt;/b&gt;\n"><strong>&lt;b&gt;your text&lt;/b&gt;</strong> - bold text.</a></li>
                                 </ul>
                             </span>
                             <span class="dropdown">
