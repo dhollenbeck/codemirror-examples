@@ -97,13 +97,13 @@
                                 <span class="caret"></span></button>
                                 <ul class="dropdown-menu dropdown-menu-right" id="helpers">
                                     <li class="dropdown-header">Text</li>
-                                    <li><a href="#"><strong>{{upper field}}</strong> - upper case.</a></li>
-                                    <li><a href="#"><strong>{{lower field}}</strong> - lower case.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;upper field&rbrace;&rbrace;</strong> - upper case.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;lower field&rbrace;&rbrace;</strong> - lower case.</a></li>
                                     <li class="dropdown-header">Links</li>
-                                    <li><a href="#"><strong>{{url download 'Certificate of Completion'}}</strong> - download link.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;url download 'Certificate of Completion'&rbrace;&rbrace;</strong> - download link.</a></li>
                                     <li class="dropdown-header">Logic</li>
-                                    <li><a href="#"><strong>{{#if field}} {{else}} {{/if}}</strong> - if else logic.</a></li>
-                                    <li><a href="#"><strong>{{#each downloads}} {{/each}}</strong> - loop array.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;#if field&rbrace;&rbrace; &lbrace;&lbrace;else&rbrace;&rbrace; &lbrace;&lbrace;/if&rbrace;&rbrace;</strong> - if else logic.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;#each downloads&rbrace;&rbrace; &lbrace;&lbrace;/each&rbrace;&rbrace;</strong> - loop array.</a></li>
                                 </ul>
                             </span>
                             <span class="dropdown">
@@ -111,15 +111,15 @@
                                 <span class="caret"></span></button>
                                 <ul class="dropdown-menu dropdown-menu-right" id="helpers">
                                     <li class="dropdown-header">User</li>
-                                    <li><a href="#"><strong>{{user.firstname}}</strong> - user first name.</a></li>
-                                    <li><a href="#"><strong>{{user.lastname}}</strong> - user last name.</a></li>
-                                    <li><a href="#"><strong>{{user.email}}</strong> - user email.</a></li>
-                                    <li><a href="#"><strong>{{user.title}}</strong> - user title.</a></li>
-                                    <li><a href="#"><strong>{{user.dob}}</strong> - user date of birth.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;user.firstname&rbrace;&rbrace;</strong> - user first name.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;user.lastname&rbrace;&rbrace;</strong> - user last name.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;user.email&rbrace;&rbrace;</strong> - user email.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;user.title&rbrace;&rbrace;</strong> - user title.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;user.dob&rbrace;&rbrace;</strong> - user date of birth.</a></li>
                                     <li class="dropdown-header">Course</li>
-                                    <li><a href="#"><strong>{{course.title}}</strong> - course title.</a></li>
-                                    <li><a href="#"><strong>{{course.duration}}</strong> - course duration.</a></li>
-                                    <li><a href="#"><strong>{{course.credits}}</strong> - course credits.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;course.title&rbrace;&rbrace;</strong> - course title.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;course.duration&rbrace;&rbrace;</strong> - course duration.</a></li>
+                                    <li><a href="#"><strong>&lbrace;&lbrace;course.credits&rbrace;&rbrace;</strong> - course credits.</a></li>
                                 </ul>
                             </span>
                             <span class="dropdown">
@@ -154,7 +154,7 @@
                         </div>
                     </div>
 					<textarea class="form-control" name="html" mode="handlebars">
-<h1 class="foobar">{{echo 'hello world'}</h1>
+<h1 class="foobar">&lbrace;&lbrace;echo 'hello world'}</h1>
 <div>
 	This is an invalid div.
 <div
