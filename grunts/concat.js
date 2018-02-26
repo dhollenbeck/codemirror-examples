@@ -86,7 +86,7 @@ module.exports = function(grunt) {
                 'libs/linting/handlebars.js',
 
                 // 3rd party libs
-                'libs/htmlhint/htmlhint.js',
+                './node_modules/htmlhint/lib/htmlhint.js',
                 'libs/jshint/jshint.js',
                 
                 // handlebars linting
