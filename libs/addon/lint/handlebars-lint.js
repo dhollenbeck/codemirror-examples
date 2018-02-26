@@ -40,6 +40,10 @@ SOFTWARE.
 		CodeMirror.registerHelper("lint", "html", function (text) {
 			var found = [], message, messages, parsed;
 
+			if (!window.HTMLHint) console.warn('handlebars-lint.js: could not detect window.HTMLHint');
+			if (!window.Handlebars) console.warn('handlebars-lint.js: could not detect window.Handlebars');
+			if (!window.HandlebarsErrorParser) console.warn('handlebars-lint.js: could not detect window.HandlebarsErrorParser');
+
 			// html linting
 			if (window.HTMLHint) {
 				messages = HTMLHint.verify(text, ruleSets);

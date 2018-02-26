@@ -16,6 +16,15 @@ module.exports = function(grunt) {
 			nonull: true,
 			dest: 'dist/codemirror-examples.js',
 			src: [
+
+                // 3rd party libs
+                './node_modules/csslint/dist/csslint.js',
+                './node_modules/htmlhint/lib/htmlhint.js',
+                './node_modules/jshint/dist/jshint.js',
+                './node_modules/handlebars/dist/handlebars.min.js',
+                './node_modules/handlebars-error-parser/index.js',
+
+                // codemirror
                 './node_modules/codemirror/lib/codemirror.js',
                 './node_modules/codemirror/mode/javascript/javascript.js',
                 './node_modules/codemirror/mode/xml/xml.js',
@@ -40,17 +49,8 @@ module.exports = function(grunt) {
                 './node_modules/codemirror/addon/search/jump-to-line.js',
                 './node_modules/codemirror/mode/markdown/markdown.js',
 
-                'libs/addon/lint/handlebars-lint.js',
-
-                // 3rd party libs
-                './node_modules/htmlhint/lib/htmlhint.js',
-                './node_modules/jshint/dist/jshint.js',
-                './node_modules/handlebars/dist/handlebars.min.js',
-                './node_modules/handlebars-error-parser/index.js',
-
-                // Warning: csslint.js must be loaded after Handlebars 
-                // otherwise it removes `window.Handlebars`.
-                './node_modules/csslint/dist/csslint.js',
+                // our libs
+                'libs/addon/lint/handlebars-lint.js',                
                 'libs/jquery/editor.js'
 			]
         },
