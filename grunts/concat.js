@@ -95,7 +95,7 @@ module.exports = function(grunt) {
 
                 // Warning: csslint.js must be loaded after Handlebars 
                 // otherwise it removes `window.Handlebars`.
-                'libs/csslint/csslint.js',
+                './node_modules/csslint/dist/csslint.js',
                 'libs/editor.js'
 			]
         },
