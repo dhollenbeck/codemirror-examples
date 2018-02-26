@@ -56,11 +56,40 @@
 		});
         form.decorate('bootstrap');
         
-        $('#commands a[data-cmd]').click(function(e) {
+        $('#commands a[cmd]').click(function(e) {
             e.preventDefault();
             var cmd = $(this).data('cmd');
             editor.execCommand(cmd);
         });
+		$('#fields a, #helpers a').click(function (e) {
+			e.preventDefault();
+			var lbrace, rbrace, str;
+
+            lbrace = String.fromCharCode(123);
+            rbrace = String.fromCharCode(125);
+			str = $(this).data('cmd') || '';
+			str = str.replace(/\[/g, lbrace);
+			str = str.replace(/]/g, rbrace);
+			str = str.replace(/\\n/g, '\n');
+			str = str.replace(/\\t/g, '\t');
+			insertString(editor, str);
+        });
+
+        function insertString(editor, str){
+            var selection, doc, cursor, pos;
+            selection = editor.getSelection();
+            if (selection.length>0){
+                editor.replaceSelection(str);
+            } else {
+                doc = editor.getDoc();
+                cursor = doc.getCursor();
+                pos = {
+                    line: cursor.line,
+                    ch: cursor.ch
+                }
+                doc.replaceRange(str, pos);
+            }
+        }
 	});
 	</script>
 
@@ -89,7 +118,7 @@
                 
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
-                    <div class="CodeMirrorToobar" style="">
+                    <div class="CodeMirrorToobar">
                         <div class="pull-right dropdown">
 
                             <span class="dropdown">
@@ -97,29 +126,29 @@
                                 <span class="caret"></span></button>
                                 <ul class="dropdown-menu dropdown-menu-right" id="helpers">
                                     <li class="dropdown-header">Text</li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;upper field&rbrace;&rbrace;</strong> - upper case.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;lower field&rbrace;&rbrace;</strong> - lower case.</a></li>
+                                    <li><a href="#" data-cmd="[[upper field]] "><strong>&lbrace;&lbrace;upper field&rbrace;&rbrace;</strong> - upper case.</a></li>
+                                    <li><a href="#" data-cmd="[[lower field]] "><strong>&lbrace;&lbrace;lower field&rbrace;&rbrace;</strong> - lower case.</a></li>
                                     <li class="dropdown-header">Links</li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;url download 'Certificate of Completion'&rbrace;&rbrace;</strong> - download link.</a></li>
+                                    <li><a href="#" data-cmd="[[url download 'Title']]"><strong>&lbrace;&lbrace;url download 'Title'&rbrace;&rbrace;</strong> - download link.</a></li>
                                     <li class="dropdown-header">Logic</li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;#if field&rbrace;&rbrace; &lbrace;&lbrace;else&rbrace;&rbrace; &lbrace;&lbrace;/if&rbrace;&rbrace;</strong> - if else logic.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;#each downloads&rbrace;&rbrace; &lbrace;&lbrace;/each&rbrace;&rbrace;</strong> - loop array.</a></li>
+                                    <li><a href="#" data-cmd="[[#if field]] [[else]] [[/if]]"><strong>&lbrace;&lbrace;#if field&rbrace;&rbrace; &lbrace;&lbrace;else&rbrace;&rbrace; &lbrace;&lbrace;/if&rbrace;&rbrace;</strong> - if else logic.</a></li>
+                                    <li><a href="#" data-cmd="[[each downloads]]\n\t... do someting\n[[/each]]"><strong>&lbrace;&lbrace;#each downloads&rbrace;&rbrace; &lbrace;&lbrace;/each&rbrace;&rbrace;</strong> - loop array.</a></li>
                                 </ul>
                             </span>
                             <span class="dropdown">
                                 <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">Fields
                                 <span class="caret"></span></button>
-                                <ul class="dropdown-menu dropdown-menu-right" id="helpers">
+                                <ul class="dropdown-menu dropdown-menu-right" id="fields">
                                     <li class="dropdown-header">User</li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;user.firstname&rbrace;&rbrace;</strong> - user first name.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;user.lastname&rbrace;&rbrace;</strong> - user last name.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;user.email&rbrace;&rbrace;</strong> - user email.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;user.title&rbrace;&rbrace;</strong> - user title.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;user.dob&rbrace;&rbrace;</strong> - user date of birth.</a></li>
+                                    <li><a href="#" data-cmd="[[user.firstname]] "><strong>&lbrace;&lbrace;user.firstname&rbrace;&rbrace;</strong> - user first name.</a></li>
+                                    <li><a href="#" data-cmd="[[user.lastname]] "><strong>&lbrace;&lbrace;user.lastname&rbrace;&rbrace;</strong> - user last name.</a></li>
+                                    <li><a href="#" data-cmd="[[user.email]] "><strong>&lbrace;&lbrace;user.email&rbrace;&rbrace;</strong> - user email.</a></li>
+                                    <li><a href="#" data-cmd="[[user.title]] "><strong>&lbrace;&lbrace;user.title&rbrace;&rbrace;</strong> - user title.</a></li>
+                                    <li><a href="#" data-cmd="[[user.dob]] "><strong>&lbrace;&lbrace;user.dob&rbrace;&rbrace;</strong> - user date of birth.</a></li>
                                     <li class="dropdown-header">Course</li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;course.title&rbrace;&rbrace;</strong> - course title.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;course.duration&rbrace;&rbrace;</strong> - course duration.</a></li>
-                                    <li><a href="#"><strong>&lbrace;&lbrace;course.credits&rbrace;&rbrace;</strong> - course credits.</a></li>
+                                    <li><a href="#" data-cmd="[[course.title]] "><strong>&lbrace;&lbrace;course.title&rbrace;&rbrace;</strong> - course title.</a></li>
+                                    <li><a href="#" data-cmd="[[course.duration]] "><strong>&lbrace;&lbrace;course.duration&rbrace;&rbrace;</strong> - course duration.</a></li>
+                                    <li><a href="#" data-cmd="[[course.credits]] "><strong>&lbrace;&lbrace;course.credits&rbrace;&rbrace;</strong> - course credits.</a></li>
                                 </ul>
                             </span>
                             <span class="dropdown">
