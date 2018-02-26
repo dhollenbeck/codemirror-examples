@@ -60,13 +60,13 @@ SOFTWARE.
 				try {
 					Handlebars.precompile(text);
 				} catch (e) {
-					parsed = window.HandlebarsErrorParser(e);
+					parsed = window.HandlebarsErrorParser(e, text);
 				}
 
 				if (parsed) {
 					found.push({
-						from: CodeMirror.Pos(parsed.startLine - 1, parsed.startColumn),
-						to: CodeMirror.Pos(parsed.endLine - 1, parsed.endColumn),
+						from: CodeMirror.Pos(parsed.minLine, parsed.minColumn),
+						to: CodeMirror.Pos(parsed.maxLine, parsed.maxColumn),
 						message: parsed.message,
 						severity: 'error' //warning or error
 					});

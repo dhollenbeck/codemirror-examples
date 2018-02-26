@@ -15357,13 +15357,13 @@ SOFTWARE.
 				try {
 					Handlebars.precompile(text);
 				} catch (e) {
-					parsed = window.HandlebarsErrorParser(e);
+					parsed = window.HandlebarsErrorParser(e, text);
 				}
 
 				if (parsed) {
 					found.push({
-						from: CodeMirror.Pos(parsed.startLine - 1, parsed.startColumn),
-						to: CodeMirror.Pos(parsed.endLine - 1, parsed.endColumn),
+						from: CodeMirror.Pos(parsed.minLine, parsed.minColumn),
+						to: CodeMirror.Pos(parsed.maxLine, parsed.maxColumn),
 						message: parsed.message,
 						severity: 'error' //warning or error
 					});
@@ -19956,27 +19956,81 @@ var f=g.nameLookup(e,b[c],a);return d?[" && ",f]:[" != null ? ",f," : ",e]})},re
 	function friendlyMessage(message) {
 		if (message.indexOf("got 'INVALID'") !== -1) return 'invalid Handlebars expression';
 		if (message === "Expecting 'EOF', got 'OPEN_ENDBLOCK'") return 'invalid closing block, check opening block';
+		if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE'") return 'empty Handlebars expression';
+		if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'EOF'") return 'invalid Handlebars expression';
+		if (message === "Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARAMS', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', 'SEP', got 'OPEN'") return 'invalid Handlebars expression';
 		return message;
 	}
 
-	var parser = function (e) {
+	var parser = function (e, html) {
 		var parsed = {};
+		var lines;
 		if (!e) return;
 		if (typeof e.message !== 'string') return;
+		if (typeof html !== 'string') return;
 
-		e.message.replace(regex1, function (match, line, code, indicator, message) {
-			parsed.startLine = +line;
-			parsed.startColumn = +indicator.length;
-			parsed.endLine = parsed.startLine;
-			parsed.endColumn = parsed.startColumn + 1;
+		lines = html.split('\n');
+
+		function getPos(lineNum, code, indicator) {
+
+			var line, min, max, dots = false, prefix = 0;
+
+			// trim off extra prefix and suffix from code which
+			// could force us to not find the pos in the line.
+			code = code.substring(0, indicator.length);
+			code = code.replace('...', function() {
+				dots = true;
+				return '';
+			});
+
+			prefix = code.indexOf('{{');
+			line = lines[lineNum];
+			min = line.indexOf(code);
+			min = min + prefix;
+			max = (!dots)
+				? min + indicator.length - 1
+				: min + indicator.length - 4;
+
+			if (min === -1) {
+				return {
+					min: 0,
+					max: 0
+				};
+			} else {
+				return {
+					min: min,
+					max: max
+				};
+			}
+		}
+
+		e.message.replace(regex1, function (match, lineNum, code, indicator, message) {
+
+			var pos;
+			lineNum = +lineNum;
+			lineNum = lineNum - 1;
+			pos = getPos(lineNum, code, indicator);
+
+			//console.log('pos:', pos);
+
+			parsed.minLine = lineNum;
+			parsed.minColumn = pos.min;
+			parsed.maxLine = lineNum;
+			parsed.maxColumn = pos.max;
 			parsed.message = friendlyMessage(message);
 			return '';
 		});
-		e.message.replace(regex2, function(match, message, line, column) {
-			parsed.startLine = +line;
-			parsed.startColumn = +column;
-			parsed.endLine = parsed.startLine;
-			parsed.endColumn = parsed.startColumn + 1;
+		e.message.replace(regex2, function(match, message, lineNum, columnNum) {
+
+			lineNum = +lineNum;
+			lineNum = lineNum - 1;
+			columnNum = +columnNum;
+			columnNum = columnNum - 1;
+
+			parsed.minLine = lineNum;
+			parsed.minColumn = columnNum;
+			parsed.maxLine = parsed.minLine;
+			parsed.maxColumn = parsed.minColumn + 1;
 			parsed.message = friendlyMessage(message);
 			return '';
 		});
