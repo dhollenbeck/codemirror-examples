@@ -12,6 +12,7 @@
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
     <link rel="stylesheet" href="../../libs/yamm/yamm.css">
     <link rel="stylesheet" href="../../libs/app/app.css">
+    <link rel="stylesheet" href="../../libs/typeahead/typeahead.css">
 
 	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
 	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -31,6 +32,8 @@
     <script src="../../dist/codemirror-examples.js"></script>
     <script src="https://provejs.github.io/provejs-jquery/examples/prove.js"></script>
     <script src="https://provejs.github.io/provejs-jquery/examples/decorator.js"></script>
+
+    <script src="../../libs/typeahead/typeahead.bundle.min.js"></script>
 
 	<script>
 	$(function(){
@@ -110,21 +113,24 @@
         });
 		$('#fields a, #helpers a, #html a').click(function (e) {
 			e.preventDefault();
-			
-            var lbrace = String.fromCharCode(123);
-            var rbrace = String.fromCharCode(125);
-			var str = $(this).data('cmd') || '';
-			str = str.replace(/\[/g, lbrace);
-			str = str.replace(/]/g, rbrace);
-			str = str.replace(/\\n/g, '\n');
-			str = str.replace(/\\t/g, '\t');
-			str = str.replace(/&lt;/g, '<');
-			str = str.replace(/&gt;/g, '>');
+            var str = $(this).data('cmd') || '';
+            
+            
 			insertString(editor, str);
         });
 
         function insertString(editor, str){
             var selection, doc, cursor, pos;
+            var lbrace = String.fromCharCode(123);
+            var rbrace = String.fromCharCode(125);
+            
+            str = str.replace(/\[/g, lbrace);
+			str = str.replace(/]/g, rbrace);
+			str = str.replace(/\\n/g, '\n');
+			str = str.replace(/\\t/g, '\t');
+			str = str.replace(/&lt;/g, '<');
+            str = str.replace(/&gt;/g, '>');
+            
             selection = editor.getSelection();
             if (selection.length>0){
                 editor.replaceSelection(str);
@@ -138,6 +144,60 @@
                 doc.replaceRange(str, pos);
             }
         }
+
+        // ****** typeahead *****      
+        var substringMatcher = function(fields) {
+            return function findMatches(q, cb) {
+                var matches = [];
+                var regex;
+                try {
+                    regex = new RegExp(q, 'i');
+
+                    // search fields
+                    $.each(fields, function(i, field) {
+                        if (regex.test(field.name)) matches.push(field);
+                        if (regex.test(field.info)) matches.push(field);
+                        if (regex.test(field.type)) matches.push(field);
+                    });
+                } catch (e) {}
+                cb(matches);
+            };
+        };
+
+        var fields = [
+            {name: 'f1000', type: 'yesno', info: 'Some special field 1000'},
+            {name: 'f1001', type: 'money', info: 'Some special field 1001'},
+            {name: 'f1002', type: 'money', info: 'Some special field 1002'},
+            {name: 'f1003', type: 'money', info: 'Some special field 1003'},
+            {name: 'f1004', type: 'money', info: 'Some special field 1004'},
+            {name: 'f1005', type: 'float', info: 'Some special field 1005'},
+            {name: 'f1006', type: 'float', info: 'Some special field 1006'},
+            {name: 'f1007', type: 'float', info: 'Some special field 1007'},
+            {name: 'f1008', type: 'float', info: 'Some special field 1008'},
+            {name: 'f1003', type: 'float', nfo: 'Some special field 1009'},
+        ];
+        fields = fields.map(function(field) {
+            field.display = field.name + ' - ' + field.info + ' (' + field.type + ')';
+            return field;
+        });
+
+        var search = $('#fields .typeahead').typeahead({
+            hint: true,
+            highlight: true,
+            minLength: 1
+        },
+        {
+            name: 'fields',
+            display: 'display',
+            source: substringMatcher(fields)
+        });
+
+        search.on('typeahead:select', function (e, field) {
+            insertString(editor, '[[' + field.name + ']]')
+        });
+        search.on('typeahead:close', function() {
+            search.typeahead('val', '');
+        });
 	});
 	</script>
 
@@ -182,6 +242,8 @@
                             <div class="collapse navbar-collapse">
                 
                                 <ul class="nav navbar-nav hidden-xs">
+
+                                    <!-- helpers dropdown -->
                                     <li class="dropdown yamm-fw">
                                         <a href="#" class="dropdown-toggle" data-toggle="dropdown">Helpers <span class="caret"></span></a>
                                         <ul class="dropdown-menu p-t-0 p-b-0">
@@ -209,7 +271,7 @@
                                                             </div>
                                                         </div>
                                                                     
-                                                        <div class="col-sm-10 helper-description p-10">
+                                                        <div class="col-sm-10 p-10">
                                                             <div id="helper1" class="helper-info">
                                                                 <div class="page-header m-t-5 m-b-10 p-b-2">
                                                                     <h4>Helper1 <small>Does Something Useful</small></h4>
@@ -249,6 +311,28 @@
                                             </li>
                                         </ul>
                                     </li>
+                                    <!-- /helpers dropdown -->
+                                    <!-- fields dropdown -->
+                                    <li class="dropdown yamm-fw">
+                                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Fields <span class="caret"></span></a>
+                                        <ul class="dropdown-menu p-t-0 p-b-0">
+                                            <li>
+                                                <div class="m-l-20 m-r-20">
+                                                    <div class="row">                                                     
+                                                        <div class="col-sm-12 er-description p-10">
+                                                            <div id="fields" class="" style="min-height:100px;">
+                                                                <div class="page-header m-t-5 m-b-10 p-b-2">
+                                                                    <h4>Fields <small>Search For a Merge Field</small></h4>
+                                                                </div>
+                                                                <input type="text" class="form-control typeahead" placeholder="Enter keyword here">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </li>
+                                    <!-- /fields dropdown -->
                                 </ul>
                                 <ul class="nav navbar-nav navbar-right">
                                     <li class="dropdown">
