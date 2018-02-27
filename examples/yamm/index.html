@@ -76,12 +76,6 @@
             input.prop('checked', true);
         });
 
-        // keep mega menu open on any click in the helper info
-        $('.helper-info').click(function (e) {
-            //e.preventDefault();
-            e.stopPropagation();
-        });
-
         // insert helper into editor
         $('.helper-info a').click(function (e) {
             e.preventDefault();
@@ -110,13 +104,19 @@
             e.preventDefault();
             var cmd = $(this).data('cmd');
             editor.execCommand(cmd);
+
+            // click body to close mega menu
+            $('body').trigger('click');
         });
-		$('#fields a, #helpers a, #html a').click(function (e) {
+
+        // html dropdown
+		$('#html a').click(function (e) {
 			e.preventDefault();
             var str = $(this).data('cmd') || '';
+            insertString(editor, str);
             
-            
-			insertString(editor, str);
+            // click body to close mega menu
+            $('body').trigger('click');
         });
 
         function insertString(editor, str){
@@ -147,7 +147,7 @@
             }
         }
 
-        // ****** typeahead *****      
+        // ****** fields typeahead *****    
         var substringMatcher = function(fields) {
             return function findMatches(q, cb) {
                 var matches = [];
@@ -155,34 +155,38 @@
                 try {
                     regex = new RegExp(q, 'i');
 
-                    // search fields
+                    // search fields array
                     $.each(fields, function(i, field) {
-                        if (regex.test(field.name)) matches.push(field);
-                        if (regex.test(field.info)) matches.push(field);
-                        if (regex.test(field.type)) matches.push(field);
+                        if (regex.test(field.name)) {
+                            matches.push(field);
+                        } else if (regex.test(field.info)) {
+                            matches.push(field);
+                        } else if (regex.test(field.type)) {
+                            matches.push(field);
+                        }
                     });
                 } catch (e) {}
                 cb(matches);
             };
         };
 
-        var fields = [
-            {name: 'f1000', type: 'yesno', info: 'Some special field 1000'},
-            {name: 'f1001', type: 'money', info: 'Some special field 1001'},
-            {name: 'f1002', type: 'money', info: 'Some special field 1002'},
-            {name: 'f1003', type: 'money', info: 'Some special field 1003'},
-            {name: 'f1004', type: 'money', info: 'Some special field 1004'},
-            {name: 'f1005', type: 'float', info: 'Some special field 1005'},
-            {name: 'f1006', type: 'float', info: 'Some special field 1006'},
-            {name: 'f1007', type: 'float', info: 'Some special field 1007'},
-            {name: 'f1008', type: 'float', info: 'Some special field 1008'},
-            {name: 'f1003', type: 'float', nfo: 'Some special field 1009'},
-        ];
+        // generate some fake field data
+        var types = ['yesno', 'money', 'float', 'integer'];
+        var fields = [];
+        for (var i = 0; i < 4000; i++) {
+            fields.push({
+                id: i,
+                name: 'f' + i,
+                type: types[Math.floor(Math.random() * types.length)],
+                info: 'Some special field'
+            });
+        }
         fields = fields.map(function(field) {
             field.display = field.name + ' - ' + field.info + ' (' + field.type + ')';
             return field;
         });
-
+        var fieldInfo = $('#field-info');
+        var fieldBtn = $('#field-insert');
         var search = $('#fields .typeahead').typeahead({
             hint: true,
             highlight: true,
@@ -193,12 +197,39 @@
             display: 'display',
             source: substringMatcher(fields)
         });
-
-        search.on('typeahead:select', function (e, field) {
-            insertString(editor, '[[' + field.name + ']]')
+        search.on('typeahead:open', function(e) {
+            //console.log('typeahead:open');
         });
-        search.on('typeahead:close', function() {
+        search.on('typeahead:select', function (e, field) {
+            //console.log('typeahead:select');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var insert = '[[field ' + field.id + ']] ';
+            fieldBtn.data('insert', insert);
+            fieldInfo.show();
+        });
+        search.on('typeahead:close', function(e) {
+            //console.log('typeahead:close');
+            //search.typeahead('val', '');
+        });
+        fieldBtn.click(function(e) {
+            var insert = fieldBtn.data('insert');
+            insertString(editor, insert);
+
+            // reset ui
             search.typeahead('val', '');
+            fieldInfo.hide();
+
+            // click body to close mega menu
+            $('body').trigger('click');
+        });
+
+        // stop the mega menu from closing
+        // https://stackoverflow.com/a/40959313
+        $('body').on("click", ".dropdown-menu", function (e) {
+            //console.log('click dropdown-menu');
+            $(this).parent().is(".open") && e.stopPropagation();
         });
 	});
 	</script>
@@ -315,7 +346,7 @@
                                     </li>
                                     <!-- /helpers dropdown -->
                                     <!-- fields dropdown -->
-                                    <li class="dropdown yamm-fw">
+                                    <li class="dropdown yamm-fw fields">
                                         <a href="#" class="dropdown-toggle" data-toggle="dropdown">Fields <span class="caret"></span></a>
                                         <ul class="dropdown-menu p-t-0 p-b-0">
                                             <li>
@@ -327,6 +358,14 @@
                                                                     <h4>Fields <small>Search For a Merge Field</small></h4>
                                                                 </div>
                                                                 <input type="text" class="form-control typeahead" placeholder="Enter keyword here">
+                                                                
+                                                                <div id="field-info" style="display:none;">
+                                                                    <p id="field-info" class="m-t-10">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla elementum rutrum posuere. Duis ac sem pharetra, imperdiet neque eu, imperdiet ligula. Donec velit erat, ultrices sed libero a, laoreet egestas justo. Vivamus sed orci in sem aliquet finibus. Duis ac ex bibendum, pretium elit nec, efficitur justo. Phasellus eleifend, orci at hendrerit mollis, sem urna accumsan libero, eu placerat massa nisl ac turpis. Donec pharetra leo mi, non dictum sem pulvinar ac.</p>
+                                                                    <div class="pull-right">
+                                                                        <a id="field-insert" class="btn btn-primary btn-small" data-insert="" href="#">Insert</a>
+                                                                        <a class="btn btn-default btn-small" href="#">More</a>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
