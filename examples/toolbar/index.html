@@ -56,7 +56,7 @@
 		});
         form.decorate('bootstrap');
         
-        $('#commands a[cmd]').click(function(e) {
+        $('#commands a').click(function(e) {
             e.preventDefault();
             var cmd = $(this).data('cmd');
             editor.execCommand(cmd);
