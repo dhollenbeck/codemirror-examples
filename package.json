@@ -1,7 +1,7 @@
 {
   "name": "codemirror-examples",
   "version": "1.0.0",
-  "description": "Example codemirror in textarea supporting html and css linting and autoresize in a bootstrap template.",
+  "description": "Codemirror examples including handlebars linting integration.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +10,7 @@
     "type": "git",
     "url": "git+https://github.com/dhollenbeck/codemirror-examples.git"
   },
-  "author": "",
+  "author": "dan@hollenbecks.com",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/dhollenbeck/codemirror-examples/issues"
