@@ -38,11 +38,11 @@ SOFTWARE.
 		"use strict";
 
 		CodeMirror.registerHelper("lint", "html", function (text) {
-			var found = [], message, messages, parsed;
+			var found = [], message, messages, parsed, errors;
 
 			if (!window.HTMLHint) console.warn('handlebars-lint.js: could not detect window.HTMLHint');
 			if (!window.Handlebars) console.warn('handlebars-lint.js: could not detect window.Handlebars');
-			if (!window.HandlebarsErrorParser) console.warn('handlebars-lint.js: could not detect window.HandlebarsErrorParser');
+			if (!window.ProveHandlebars) console.warn('handlebars-lint.js: could not detect window.ProveHandlebars');
 
 			// html linting
 			if (window.HTMLHint) {
@@ -60,21 +60,18 @@ SOFTWARE.
 			}
 
 			// Handlebars linting
-			if (window.Handlebars && window.HandlebarsErrorParser) {
-				try {
-					Handlebars.precompile(text);
-				} catch (e) {
-					parsed = window.HandlebarsErrorParser(e, text);
-				}
+			if (window.Handlebars && window.ProveHandlebars) {
 
-				if (parsed) {
+				errors = window.ProveHandlebars.linter(text);
+				errors.forEach(function(error){
+					// console.log('error', error);
 					found.push({
-						from: CodeMirror.Pos(parsed.minLine, parsed.minColumn),
-						to: CodeMirror.Pos(parsed.maxLine, parsed.maxColumn),
-						message: parsed.message,
-						severity: 'error' //warning or error
+						from: CodeMirror.Pos(error.start.line, error.start.column),
+						to: CodeMirror.Pos(error.end.line, error.end.column),
+						message: error.message,
+						severity: error.severity
 					});
-				}
+				});
 			}
 			return found;
 		});
