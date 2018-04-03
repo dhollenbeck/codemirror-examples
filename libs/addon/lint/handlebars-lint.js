@@ -37,44 +37,80 @@ SOFTWARE.
 	(function (CodeMirror) {
 		"use strict";
 
-		CodeMirror.registerHelper("lint", "html", function (text) {
-			var found = [], message, messages, parsed, errors;
+		function lintHtml(html) {
+			var errors, found = [];
+			if (!window.HTMLHint) return found;
+			errors = HTMLHint.verify(html, ruleSets);
+			errors.forEach(function(error) {
+				var startLine = error.line - 1;
+				var endLine = error.line - 1;
+				var startCol = error.col - 1;
+				var endCol = error.col;
+				var from = CodeMirror.Pos(startLine, startCol);
+				var to = CodeMirror.Pos(endLine, endCol);
+
+				found.push({
+					from: from,
+					to: to,
+					message: error.message,
+					severity: error.type
+				});
+			});
+			return found;
+		}
+
+		function lintHandlebars(html) {
+			var errors, found = [];
+			if (!window.Handlebars || !window.ProveHandlebars) return found;
+			errors = window.ProveHandlebars.linter(html);
+			errors.forEach(function(error) {
+				var from = CodeMirror.Pos(error.start.line, error.start.column);
+				var to = CodeMirror.Pos(error.end.line, error.end.column);
+
+				found.push({
+					from: from,
+					to: to,
+					message: error.message,
+					severity: error.severity
+				});
+			});
+			return found;
+		}
+
+		function linterSync(html) {
+			var found = [], messages1, messages2;
 
 			if (!window.HTMLHint) console.warn('handlebars-lint.js: could not detect window.HTMLHint');
 			if (!window.Handlebars) console.warn('handlebars-lint.js: could not detect window.Handlebars');
 			if (!window.ProveHandlebars) console.warn('handlebars-lint.js: could not detect window.ProveHandlebars');
 
 			// html linting
-			if (window.HTMLHint) {
-				messages = HTMLHint.verify(text, ruleSets);
-				for (var i = 0; i < messages.length; i++) {
-					message = messages[i];
-					var startLine = message.line - 1, endLine = message.line - 1, startCol = message.col - 1, endCol = message.col;
-					found.push({
-						from: CodeMirror.Pos(startLine, startCol),
-						to: CodeMirror.Pos(endLine, endCol),
-						message: message.message,
-						severity: message.type
-					});
-				}
-			}
+			messages1 = lintHtml(html);
+			messages1.forEach(function(message) {
+				message.message = 'HTML: ' + message.message;
+				found.push(message);
+			});
 
 			// Handlebars linting
-			if (window.Handlebars && window.ProveHandlebars) {
-
-				errors = window.ProveHandlebars.linter(text);
-				errors.forEach(function(error){
-					// console.log('error', error);
-					found.push({
-						from: CodeMirror.Pos(error.start.line, error.start.column),
-						to: CodeMirror.Pos(error.end.line, error.end.column),
-						message: error.message,
-						severity: error.severity
-					});
+			if (found.length === 0) {
+				messages2 = lintHandlebars(html);
+				messages2.forEach(function(message) {
+					message.message = 'HANDLEBARS: ' + message.message;
+					found.push(message);
 				});
 			}
 			return found;
-		});
+		}
+
+		function linterAsync(html, next) {
+			var errors = linterSync(html);
+			next(errors);
+		}
+		linterAsync.async = true;
+
+		// register either sync or async linter
+		// CodeMirror.registerHelper("lint", "html", linterSync);
+		CodeMirror.registerHelper("lint", "html", linterAsync);
 	});
 
 // ruleSets for HTMLLint

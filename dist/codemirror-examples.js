@@ -48193,17 +48193,82 @@ var regex1 = /^Parse error on line ([0-9]+)+:\n([^\n].*)\n([^\n].*)\n(.*)$/;
 var regex2 = /^(.*) - ([0-9]+):([0-9]+)$/;
 
 function friendlyMessage(message) {
-	if (message.indexOf("got 'INVALID'") !== -1) return 'invalid Handlebars expression';
-	if (message === "Expecting 'EOF', got 'OPEN_ENDBLOCK'") return 'invalid closing block, check opening block';
-	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE'") return 'empty Handlebars expression';
-	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'EOF'") return 'invalid Handlebars expression';
-	if (message === "Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARAMS', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', 'SEP', got 'OPEN'") return 'invalid Handlebars expression';
-	if (message === "Expecting 'CLOSE', 'OPEN_SEXPR', 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE_RAW_BLOCK'") return 'invalid Handlebars expression';
-	if (message.indexOf("', got '") !== -1) return 'invalid Handlebars expression';
+	if (message.indexOf("got 'INVALID'") !== -1) return 'Invalid Handlebars expression.';
+	if (message === "Expecting 'EOF', got 'OPEN_ENDBLOCK'") return 'Invalid closing block, check opening block.';
+	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE'") return 'Empty Handlebars expression.';
+	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'EOF'") return 'Invalid Handlebars expression.';
+	if (message === "Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARAMS', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', 'SEP', got 'OPEN'") return 'Invalid Handlebars expression.';
+	if (message === "Expecting 'CLOSE', 'OPEN_SEXPR', 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE_RAW_BLOCK'") return 'Invalid Handlebars expression.';
+	if (message.indexOf("', got '") !== -1) return 'Invalid Handlebars expression.';
 	return message;
 }
 
-var parser = function (e, html) {
+function getPos(lines, lineNum, code, indicator) {
+
+	var line, min, max, dots = false, prefix = 0;
+	var pos = {};
+
+	// handle special cases
+	if (code === '{{{{') {
+		pos.min = 0;
+		pos.max = 4;
+		return pos;
+	} else if (code === '{{{') {
+		pos.min = 0;
+		pos.max = 3;
+		return pos;
+	} else  if (code === '{{') {
+		pos.min = 0;
+		pos.max = 2;
+		return pos;
+	} else if (code.indexOf('{{<') !== -1) {
+		pos.min = lines[lineNum].indexOf('{{<');
+		pos.max = pos.min + 3;
+		return pos;
+	} else if (code === '{{}}') {
+		pos.min = 0;
+		pos.max = 4;
+		return pos;
+	} else if (code.indexOf('{{{}}{') !== -1) {
+		pos.min = lines[lineNum].indexOf('{{{}}}');
+		pos.max = pos.min + 6;
+		return pos;
+	} else if (code.indexOf('{{#}}') !== -1) {
+		pos.min = lines[lineNum].indexOf('{{#}}');
+		pos.max = pos.min + 5;
+		return pos;
+	}
+
+	// trim off extra prefix and suffix from code which
+	// could force us to not find the pos in the line.
+	code = code.substring(0, indicator.length);
+	code = code.replace('...', function() {
+		dots = true;
+		return '';
+	});
+
+	prefix = code.indexOf('{{');
+	line = lines[lineNum];
+	min = line.indexOf(code);
+	min = min + prefix;
+	max = (!dots)
+		? min + indicator.length - 1
+		: min + indicator.length - 4;
+
+	if (min === -1) {
+		return {
+			min: 0,
+			max: 0
+		};
+	} else {
+		return {
+			min: min,
+			max: max
+		};
+	}
+}
+
+exports.parser = function (e, html) {
 	var parsed = {};
 	var lines;
 	if (!e) return;
@@ -48212,45 +48277,12 @@ var parser = function (e, html) {
 
 	lines = html.split('\n');
 
-	function getPos(lineNum, code, indicator) {
-
-		var line, min, max, dots = false, prefix = 0;
-
-		// trim off extra prefix and suffix from code which
-		// could force us to not find the pos in the line.
-		code = code.substring(0, indicator.length);
-		code = code.replace('...', function() {
-			dots = true;
-			return '';
-		});
-
-		prefix = code.indexOf('{{');
-		line = lines[lineNum];
-		min = line.indexOf(code);
-		min = min + prefix;
-		max = (!dots)
-			? min + indicator.length - 1
-			: min + indicator.length - 4;
-
-		if (min === -1) {
-			return {
-				min: 0,
-				max: 0
-			};
-		} else {
-			return {
-				min: min,
-				max: max
-			};
-		}
-	}
-
 	e.message.replace(regex1, function (match, lineNum, code, indicator, message) {
 
 		var pos;
 		lineNum = +lineNum;
 		lineNum = lineNum - 1;
-		pos = getPos(lineNum, code, indicator);
+		pos = getPos(lines, lineNum, code, indicator);
 
 		//console.log('pos:', pos);
 
@@ -48287,8 +48319,6 @@ var parser = function (e, html) {
 	});
 	return parsed;
 };
-
-exports.parser = parser;
 
 },{}],55:[function(require,module,exports){
 'use strict';
@@ -48349,11 +48379,12 @@ exports.lint = function(rule, param) {
 
 var Selectors = require('./selectors');
 var Formats = require('./formats');
+var Walker = require('./walker');
 var isFunction = require('lodash.isfunction');
 var isObject = require('lodash.isobject');
 var forOwn = require('lodash.forown');
 var keys = require('lodash.keys');
-var includes = require('lodash.includes');
+
 
 function pruneHelpers(node) {
 
@@ -48518,23 +48549,11 @@ function lintHelpers(helpers, rules) {
 	return errors;
 }
 
-function filterHelpersNodes(nodes, rules) {
-	var helperNames = keys(rules.helpers);
-
-	var helpers = nodes.filter(function(node) {
-		if (node.type !== 'MustacheStatement' && node.type !== 'BlockStatement') return false;
-		if (node.params.length > 0) return true;
-		if (node.hash !== undefined) return true;
-		if (includes(helperNames, node.path.original)) return true; // helper with no hash or params
-		return false;
-	});
-
-	helpers = helpers.map(pruneHelpers);
-	return helpers;
-}
-
 exports.linter = function (nodes, rules) {
-	var helpers = filterHelpersNodes(nodes, rules);
+	var helpers = [];
+	var names = keys(rules.helpers);
+	Walker.helpers(nodes, names, helpers);
+	helpers = helpers.map(pruneHelpers);
 	var errors = lintHelpers(helpers, rules);
 	return errors;
 };
@@ -48607,7 +48626,7 @@ exports.config = {
 	}
 };
 
-},{"./formats":55,"./selectors":57,"lodash.forown":37,"lodash.includes":38,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
+},{"./formats":55,"./selectors":57,"./walker":58,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
 'use strict';
 
 var find = require('lodash.find');
@@ -48701,7 +48720,33 @@ exports.positional = function(astHelper, num) {
 	return params[num];
 };
 
-},{"lodash.find":36}]},{},[4])(4)
+},{"lodash.find":36}],58:[function(require,module,exports){
+'use strict';
+
+var includes = require('lodash.includes');
+
+function isHelper(node, names) {
+	if (node.type !== 'MustacheStatement' && node.type !== 'BlockStatement') return false;
+	if (node.params.length > 0) return true;
+	if (node.hash !== undefined) return true;
+	if (includes(names, node.path.original)) return true; // helper with no hash or params
+	return false;
+}
+
+exports.helpers = function(tree, names, helpers) {
+
+	var nodes = tree.body || tree;
+
+	// loop each parent nodes
+	nodes.forEach(function(node) {
+		// if helper push to helpers array
+		if (isHelper(node, names)) helpers.push(node);
+		// if child nodes recursively call this method
+		if (node.program) exports.helpers(node.program, names, helpers);
+	});
+};
+
+},{"lodash.includes":38}]},{},[4])(4)
 });
 
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
@@ -64300,44 +64345,80 @@ SOFTWARE.
 	(function (CodeMirror) {
 		"use strict";
 
-		CodeMirror.registerHelper("lint", "html", function (text) {
-			var found = [], message, messages, parsed, errors;
+		function lintHtml(html) {
+			var errors, found = [];
+			if (!window.HTMLHint) return found;
+			errors = HTMLHint.verify(html, ruleSets);
+			errors.forEach(function(error) {
+				var startLine = error.line - 1;
+				var endLine = error.line - 1;
+				var startCol = error.col - 1;
+				var endCol = error.col;
+				var from = CodeMirror.Pos(startLine, startCol);
+				var to = CodeMirror.Pos(endLine, endCol);
+
+				found.push({
+					from: from,
+					to: to,
+					message: error.message,
+					severity: error.type
+				});
+			});
+			return found;
+		}
+
+		function lintHandlebars(html) {
+			var errors, found = [];
+			if (!window.Handlebars || !window.ProveHandlebars) return found;
+			errors = window.ProveHandlebars.linter(html);
+			errors.forEach(function(error) {
+				var from = CodeMirror.Pos(error.start.line, error.start.column);
+				var to = CodeMirror.Pos(error.end.line, error.end.column);
+
+				found.push({
+					from: from,
+					to: to,
+					message: error.message,
+					severity: error.severity
+				});
+			});
+			return found;
+		}
+
+		function linterSync(html) {
+			var found = [], messages1, messages2;
 
 			if (!window.HTMLHint) console.warn('handlebars-lint.js: could not detect window.HTMLHint');
 			if (!window.Handlebars) console.warn('handlebars-lint.js: could not detect window.Handlebars');
 			if (!window.ProveHandlebars) console.warn('handlebars-lint.js: could not detect window.ProveHandlebars');
 
 			// html linting
-			if (window.HTMLHint) {
-				messages = HTMLHint.verify(text, ruleSets);
-				for (var i = 0; i < messages.length; i++) {
-					message = messages[i];
-					var startLine = message.line - 1, endLine = message.line - 1, startCol = message.col - 1, endCol = message.col;
-					found.push({
-						from: CodeMirror.Pos(startLine, startCol),
-						to: CodeMirror.Pos(endLine, endCol),
-						message: message.message,
-						severity: message.type
-					});
-				}
-			}
+			messages1 = lintHtml(html);
+			messages1.forEach(function(message) {
+				message.message = 'HTML: ' + message.message;
+				found.push(message);
+			});
 
 			// Handlebars linting
-			if (window.Handlebars && window.ProveHandlebars) {
-
-				errors = window.ProveHandlebars.linter(text);
-				errors.forEach(function(error){
-					// console.log('error', error);
-					found.push({
-						from: CodeMirror.Pos(error.start.line, error.start.column),
-						to: CodeMirror.Pos(error.end.line, error.end.column),
-						message: error.message,
-						severity: error.severity
-					});
+			if (found.length === 0) {
+				messages2 = lintHandlebars(html);
+				messages2.forEach(function(message) {
+					message.message = 'HANDLEBARS: ' + message.message;
+					found.push(message);
 				});
 			}
 			return found;
-		});
+		}
+
+		function linterAsync(html, next) {
+			var errors = linterSync(html);
+			next(errors);
+		}
+		linterAsync.async = true;
+
+		// register either sync or async linter
+		// CodeMirror.registerHelper("lint", "html", linterSync);
+		CodeMirror.registerHelper("lint", "html", linterAsync);
 	});
 
 // ruleSets for HTMLLint
