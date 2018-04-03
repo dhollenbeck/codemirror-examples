@@ -61,8 +61,8 @@ SOFTWARE.
 
 		function lintHandlebars(html) {
 			var errors, found = [];
-			if (!window.Handlebars || !window.ProveHandlebars) return found;
-			errors = window.ProveHandlebars.linter(html);
+			if (!window.Handlebars || !window.HandlebarsProve) return found;
+			errors = window.HandlebarsProve.linter(html);
 			errors.forEach(function(error) {
 				var from = CodeMirror.Pos(error.start.line, error.start.column);
 				var to = CodeMirror.Pos(error.end.line, error.end.column);
@@ -82,7 +82,7 @@ SOFTWARE.
 
 			if (!window.HTMLHint) console.warn('handlebars-lint.js: could not detect window.HTMLHint');
 			if (!window.Handlebars) console.warn('handlebars-lint.js: could not detect window.Handlebars');
-			if (!window.ProveHandlebars) console.warn('handlebars-lint.js: could not detect window.ProveHandlebars');
+			if (!window.HandlebarsProve) console.warn('handlebars-lint.js: could not detect window.HandlebarsProve');
 
 			// html linting
 			messages1 = lintHtml(html);
