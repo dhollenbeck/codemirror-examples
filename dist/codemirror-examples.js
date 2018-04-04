@@ -48363,7 +48363,7 @@ exports.lint = function(rule, param) {
 		ok = includes(allowed, type, param);
 		return ok;
 	} else if (isFunction(formats)) {
-		return formats(type, value, param);
+		return formats(value, type, param);
 	} else {
 		return false;
 	}
@@ -48411,7 +48411,11 @@ function lint(rule, param) {
 	var error, message;
 	var ok = Formats.lint(rule, param);
 
+	// todo: the formats callback function should be able to return
+	// its own error object.
+
 	if (!ok) {
+		// todo: the Messages.get() should allow the overriding of the message via rule.message
 		message = (rule.message)
 			? Messages.format(rule.message, rule)
 			: Messages.get('formats', rule);
@@ -48651,7 +48655,6 @@ function errorBlock(rule) {
 }
 
 function errorParamMissing(rule, params) {
-	console.log('errorParamMissing()');
 	var message;
 	if (rule.required === true && params.length === 0) {
 		message = exports.format('The {{@helper.name}} helper requires a `@rule.name` parameter, which was not found.', rule);
