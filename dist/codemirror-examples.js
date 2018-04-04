@@ -48676,9 +48676,9 @@ function near(code) {
 }
 
 exports.parser = function (str, code) {
-	// console.log('parser()');
-	// console.log('* str:', str);
-	// console.log('* code:', code);
+
+	if (str === "Expecting 'EQUALS', got 'CLOSE'")
+		str = 'Invalid expression near ' + near(code) + '. Named parameters should only be placed after positional parameters.';
 
 	if (str.indexOf("got 'INVALID'") !== -1)
 		str = 'Invalid or incomplete Handlebars expression ' + near(code) + '.';
