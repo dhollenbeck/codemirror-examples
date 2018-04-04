@@ -48656,7 +48656,7 @@ function errorParamMissing(rule, params) {
 	if (rule.required === true && params.length === 0) {
 		message = exports.format('The {{@helper.name}} helper requires a `@rule.name` parameter, which was not found.', rule);
 	} else if (rule.required === 1) {
-		message = exports.format('The {{@helper.name}} helper requires ' + word(rule.required) + ' `@rule.name` parameter, but which was not.', rule);
+		message = exports.format('The {{@helper.name}} helper requires ' + word(rule.required) + ' `@rule.name` parameter, which was not found.', rule);
 	} else {
 		message = exports.format('The {{@helper.name}} helper requires ' + word(rule.required) + ' `@rule.name` parameters, but ' + word(params.length) + ' were found.', rule);
 	}
