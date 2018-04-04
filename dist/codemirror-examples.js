@@ -35880,9 +35880,10 @@ function isErrors(ast) {
 	return !!ast.length;
 }
 
-exports.linter = function (html, rules) {
+exports.verify = function (html, rules) {
 
-	if (!rules) rules = exports.config;
+	// todo: extend defaults
+	if (!rules) rules = exports._configs;
 
 	var errors;
 	var ast = parse(html);
@@ -35892,12 +35893,14 @@ exports.linter = function (html, rules) {
 		return errors;
 	}
 	var nodes = ast.body || ast;
-	errors = Helpers.linter(nodes, rules);
+	errors = Helpers.verify(nodes, rules);
 	return errors;
 };
 
-exports.config = {
-	helpers: Helpers.config
+exports.register = Helpers.register;
+
+exports._configs = {
+	helpers: Helpers.configs
 };
 
 
@@ -48191,17 +48194,7 @@ define(function (require, exports, module) {
 
 var regex1 = /^Parse error on line ([0-9]+)+:\n([^\n].*)\n([^\n].*)\n(.*)$/;
 var regex2 = /^(.*) - ([0-9]+):([0-9]+)$/;
-
-function friendlyMessage(message) {
-	if (message.indexOf("got 'INVALID'") !== -1) return 'Invalid Handlebars expression.';
-	if (message === "Expecting 'EOF', got 'OPEN_ENDBLOCK'") return 'Invalid closing block, check opening block.';
-	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE'") return 'Empty Handlebars expression.';
-	if (message === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'EOF'") return 'Invalid Handlebars expression.';
-	if (message === "Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARAMS', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', 'SEP', got 'OPEN'") return 'Invalid Handlebars expression.';
-	if (message === "Expecting 'CLOSE', 'OPEN_SEXPR', 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE_RAW_BLOCK'") return 'Invalid Handlebars expression.';
-	if (message.indexOf("', got '") !== -1) return 'Invalid Handlebars expression.';
-	return message;
-}
+var Messages = require('./messages');
 
 function getPos(lines, lineNum, code, indicator) {
 
@@ -48294,7 +48287,7 @@ exports.parser = function (e, html) {
 			line: lineNum,
 			column: pos.max
 		};
-		parsed.message = friendlyMessage(message);
+		parsed.message = Messages.parser(message, code);
 		parsed.severity = 'error';
 		return '';
 	});
@@ -48313,14 +48306,14 @@ exports.parser = function (e, html) {
 			line: parsed.start.line,
 			column: parsed.start.column
 		};
-		parsed.message = friendlyMessage(message);
+		parsed.message = Messages.parser(message);
 		parsed.severity = 'error';
 		return '';
 	});
 	return parsed;
 };
 
-},{}],55:[function(require,module,exports){
+},{"./messages":57}],55:[function(require,module,exports){
 'use strict';
 
 var includes = require('lodash.includes');
@@ -48380,6 +48373,7 @@ exports.lint = function(rule, param) {
 var Selectors = require('./selectors');
 var Formats = require('./formats');
 var Walker = require('./walker');
+var Messages = require('./messages');
 var isFunction = require('lodash.isfunction');
 var isObject = require('lodash.isobject');
 var forOwn = require('lodash.forown');
@@ -48402,12 +48396,6 @@ function pruneHelpers(node) {
 	return helper;
 }
 
-function popMsg(str, helperName, hashName) {
-	return str
-		.replace('@helperName', helperName)
-		.replace('@hashName', hashName);
-}
-
 function lintHelperCallback(astHelper, callback) {
 	var posParams = Selectors.allPositional(astHelper);
 	var namParams = Selectors.allNamed(astHelper);
@@ -48418,12 +48406,13 @@ function lintHelperCallback(astHelper, callback) {
 
 function lint(rule, param) {
 
-
+	var error, message;
 	var ok = Formats.lint(rule, param);
-	var message = rule.message || 'The `@helperName` helper positional parameter `@hashName` has an invalid value format.';
-	var error;
+
 	if (!ok) {
-		message = popMsg(message, rule.helper, rule.name);
+		message = (rule.message)
+			? Messages.format(rule.message, rule)
+			: Messages.get('formats', rule);
 		error = {
 			severity: rule.severity,
 			message: message,
@@ -48440,10 +48429,22 @@ function lint(rule, param) {
 	return error;
 }
 
-function lintHelperParam(astHelper, rule, ruleKey, block) {
+function hasMissingParams(rule, params) {
+	if (rule.required === true && params.length === 0) return true;
+	if (rule.required > params.length) return true;
+	return false;
+}
+
+function hasWrongBlock(astHelper, rule) {
+	return rule.block !== astHelper.block;
+}
+
+function lintHelperParam(astHelper, rule, ruleKey) {
 	var error;
 	var selector = rule.selector;
 	var params = Selectors.params(astHelper, selector, ruleKey);
+	var isMissingParams = hasMissingParams(rule, params);
+	var isWrongBlock = hasWrongBlock(astHelper, rule);
 
 	// lint each param against the config rule
 	params.forEach(function(param) {
@@ -48457,13 +48458,10 @@ function lintHelperParam(astHelper, rule, ruleKey, block) {
 	if (rule.required === 0) return;
 
 	// lint block and non-block helpers
-	if (block !== astHelper.block) {
-		var message = (block)
-			? popMsg('The `@helperName` block helper requires a `#` before its name.', rule.helper)
-			: popMsg('The `@helperName` non-block helper should not have a `#` before its name.', rule.helper);
+	if (isWrongBlock) {
 		return {
 			severity: 'error',
-			message: message,
+			message: Messages.get('block', rule),
 			start: {
 				line: astHelper.loc.start.line - 1,
 				column: astHelper.loc.start.column
@@ -48473,24 +48471,10 @@ function lintHelperParam(astHelper, rule, ruleKey, block) {
 				column: astHelper.loc.end.column
 			}
 		};
-	} else if (rule.required === true && params.length === 0) {  /// lint missing params
-
+	} else if (isMissingParams) {
 		return {
 			severity: rule.severity,
-			message: popMsg('The `@helperName` helper requires a positional parameter of `@hashName`, but non was found.', rule.helper, rule.name),
-			start: {
-				line: astHelper.loc.start.line - 1,
-				column: astHelper.loc.start.column
-			},
-			end: {
-				line: astHelper.loc.end.line - 1,
-				column: astHelper.loc.end.column
-			}
-		};
-	} else if (rule.required > params.length) {
-		return {
-			severity: rule.severity,
-			message: popMsg('The `@helperName` helper requires ' + words(rule.required) + ' `@hashName` params, but only ' + params.length + ' were found.', rule.helper, rule.name),
+			message: Messages.get('param', rule, params),
 			start: {
 				line: astHelper.loc.start.line - 1,
 				column: astHelper.loc.start.column
@@ -48503,15 +48487,6 @@ function lintHelperParam(astHelper, rule, ruleKey, block) {
 	}
 }
 
-function words(val) {
-	if (val === false) return 'an optional';
-	if (val === true) return 'one';
-	if (val === 0) return 'an optional';
-	if (val === 1) return 'one';
-	if (val === 2) return 'two';
-	if (val === 3) return 'three';
-	return val;
-}
 
 function lintHelper(astHelper, objRules) {
 
@@ -48530,9 +48505,10 @@ function lintHelper(astHelper, objRules) {
 			if (!rule.name) rule.name = ruleKey;
 			if (!rule.helper) rule.helper = astHelper.name;
 			if (!rule.severity) rule.severity = 'error';
+			rule.block = block;
 
 			if (error) return false; // break loop
-			error = lintHelperParam(astHelper, rule, ruleKey, block);
+			error = lintHelperParam(astHelper, rule, ruleKey);
 		});
 	}
 
@@ -48549,7 +48525,7 @@ function lintHelpers(helpers, rules) {
 	return errors;
 }
 
-exports.linter = function (nodes, rules) {
+exports.verify = function (nodes, rules) {
 	var helpers = [];
 	var names = keys(rules.helpers);
 	Walker.helpers(nodes, names, helpers);
@@ -48558,8 +48534,12 @@ exports.linter = function (nodes, rules) {
 	return errors;
 };
 
+exports.register = function(name, config) {
+	exports.configs[name] = config;
+};
 
-exports.config = {
+
+exports.configs = {
 	if: {
 		block: true,
 		params: {
@@ -48570,7 +48550,7 @@ exports.config = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{#if}} helper only supports a single condition parameter. This parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter. The hightlighted parameter should be removed.',
 				formats: false
 			}
 		}
@@ -48589,7 +48569,7 @@ exports.config = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{#lookup}} helper only supports two parameters. This parameter should be removed.',
+				message: 'The {{@helper.name}} helper only supports two parameters. The highlighted parameter should be removed.',
 				formats: false
 			}
 		}
@@ -48604,7 +48584,7 @@ exports.config = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{#each}} helper only supports a single parameter and should be an array value. This parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter and should be an array value. The highlighted parameter should be removed.',
 				formats: false
 			}
 		}
@@ -48619,14 +48599,127 @@ exports.config = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{#unless}} helper only supports a single parameter. This parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter. The hightlighted parameter should be removed.',
+				formats: false
+			}
+		}
+	},
+	with: {
+		block: true,
+		params: {
+			value: {
+				selector: 'positional(0)',
+				required: 1
+			},
+			extraneous: {
+				selector: '!',
+				severity: 'warning',
+				message: 'The {{@helper.name}} helper only supports a single parameter. The highlighted parameter should be removed.',
 				formats: false
 			}
 		}
 	}
 };
 
-},{"./formats":55,"./selectors":57,"./walker":58,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
+},{"./formats":55,"./messages":57,"./selectors":58,"./walker":59,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
+'use strict';
+
+
+function words(val) {
+	if (val === false) return 'an optional';
+	if (val === true) return 'one';
+	if (val === 0) return 'an optional';
+	if (val === 1) return 'one';
+	if (val === 2) return 'two';
+	if (val === 3) return 'three';
+	return val;
+}
+
+function errorFormats(rule) {
+	var message = (rule.block)
+		? 'The {{#@helper.name}} helper parameter `@rule.name` has an invalid value format.'
+		: 'The {{@helper.name}} helper parameter `@rule.name` has an invalid value format.';
+	return exports.format(message, rule);
+}
+
+function errorBlock(rule) {
+	var message = (rule.block)
+		? exports.format('The {{#@helper.name}} block helper requires a `#` before its name.', rule)
+		: exports.format('The {{@helper.name}} non-block helper should not have a `#` before its name.', rule);
+	return message;
+}
+
+function errorParams(rule, params) {
+	var message = (rule.required === true)
+		? exports.format('The {{@helper.name}} helper requires ' + words(rule.required) + ' `@rule.name` params, but only ' + params.length + ' were found.', rule)
+		: exports.format('The {{@helper.name}} helper requires a `@rule.name` parameter, but non was found.', rule);
+	return message;
+}
+
+exports.parser = function (str, code) {
+	// console.log('parser()');
+	// console.log('* str:', str);
+	// console.log('* code:', code);
+
+	if (str.indexOf("got 'INVALID'") !== -1)
+		str = 'Invalid or incomplete Handlebars expression.';
+
+	if (str === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'EOF'")
+		str = 'Empty or incomplete Handlebars expression.';
+
+	if (str === "Expecting 'EOF', got 'OPEN_ENDBLOCK'")
+		str = 'Invalid closing block, check opening block.';
+
+	if (str === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE'")
+		str = 'Empty expression.';
+
+	if (str === "Expecting 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE_UNESCAPED'")
+		str = 'Empty expression.';
+
+	if (str === "Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARAMS', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', 'SEP', got 'OPEN'")
+		str = 'Invalid expression.';
+
+	if (str === "Expecting 'CLOSE', 'OPEN_SEXPR', 'ID', 'STRING', 'NUMBER', 'BOOLEAN', 'UNDEFINED', 'NULL', 'DATA', got 'CLOSE_RAW_BLOCK'")
+		str = 'Invalid expression.';
+
+	if (str.indexOf("Expecting 'OPEN_INVERSE_CHAIN', 'INVERSE', 'OPEN_ENDBLOCK', got 'EOF'") !== -1)
+		str = 'Missing block closing expression for code near ' + code + '.';
+
+	if (str.indexOf("', got 'EOF'") !== -1)
+		str = 'Missing closing expression for code near ' + code + '.';
+
+	if (str.indexOf("', got '") !== -1)
+		str = 'Invalid expression.';
+
+	if (str.indexOf("doesn't match") !== -1)
+		str = 'The opening and closing expressions do not match. Specifically, ' + mismatch(str) + '.';
+
+	// console.log(str);
+
+	return str;
+};
+
+function mismatch(str) {
+	return '{{' + str.replace(" doesn't match ", "}} doesn't match {{/") + '}}';
+}
+
+exports.get = function(type, rule, params) {
+	if (type === 'block') return errorBlock(rule);
+	if (type === 'formats') return errorFormats(rule);
+	if (type === 'params') return errorParams(rule, params);
+};
+
+exports.format = function(message, rule) {
+
+	// handle blocks
+	if (rule.block) message = message.replace('{{@helper.name}}', '{{#@helper.name}}');
+
+	return message
+		.replace('@helper.name', rule.helper)
+		.replace('@rule.name', rule.name);
+};
+
+},{}],58:[function(require,module,exports){
 'use strict';
 
 var find = require('lodash.find');
@@ -48720,7 +48813,7 @@ exports.positional = function(astHelper, num) {
 	return params[num];
 };
 
-},{"lodash.find":36}],58:[function(require,module,exports){
+},{"lodash.find":36}],59:[function(require,module,exports){
 'use strict';
 
 var includes = require('lodash.includes');
@@ -64308,28 +64401,7 @@ CodeMirror.defineMIME("text/x-markdown", "markdown");
 
 /*
 The MIT License (MIT)
-
-Copyright (c) 2015 Michael (https://github.com/mikethedj4)
-
-https://raw.githubusercontent.com/mikethedj4/html-lint-for-codemirror/gh-pages/LICENSE
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 */
 
 // CodeMirror HTMLHint Integration
@@ -64343,7 +64415,7 @@ SOFTWARE.
 })
 
 	(function (CodeMirror) {
-		"use strict";
+		'use strict';
 
 		function lintHtml(html) {
 			var errors, found = [];
@@ -64370,7 +64442,7 @@ SOFTWARE.
 		function lintHandlebars(html) {
 			var errors, found = [];
 			if (!window.Handlebars || !window.HandlebarsProve) return found;
-			errors = window.HandlebarsProve.linter(html);
+			errors = window.HandlebarsProve.verify(html);
 			errors.forEach(function(error) {
 				var from = CodeMirror.Pos(error.start.line, error.start.column);
 				var to = CodeMirror.Pos(error.end.line, error.end.column);
