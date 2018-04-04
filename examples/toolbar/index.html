@@ -55,7 +55,7 @@
 			}
 		});
         form.decorate('bootstrap');
-        
+
         $('#commands a').click(function(e) {
             e.preventDefault();
             var cmd = $(this).data('cmd');
@@ -63,7 +63,7 @@
         });
 		$('#fields a, #helpers a, #html a').click(function (e) {
 			e.preventDefault();
-			
+
             var lbrace = String.fromCharCode(123);
             var rbrace = String.fromCharCode(125);
 			var str = $(this).data('cmd') || '';
@@ -116,7 +116,7 @@
 				</div>
 			</div>
 			<div class="form-group">
-                
+
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
                     <div class="CodeMirrorToobar">
@@ -184,14 +184,13 @@
                         </div>
                     </div>
 					<textarea class="form-control" name="html" mode="handlebars">
-<h1 class="foobar">&lbrace;&lbrace;echo 'hello world'}</h1>
-<div>
-	This is an invalid div.
-<div
+{{#each foobars extraThing}}
+<h1 class="foobar">{{echo 'hello world'}</h1>
+{{/if}}
 					</textarea>
 				</div>
 			</div>
-			
+
 			<div class="form-group">
 				<div class="col-sm-offset-2 col-sm-10">
 					<button type="submit" class="btn btn-primary">Save</button>
