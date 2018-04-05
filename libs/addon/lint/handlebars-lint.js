@@ -41,7 +41,7 @@ Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 		function lintHandlebars(html) {
 			var errors, found = [];
 			if (!window.Handlebars || !window.HandlebarsProve) return found;
-			errors = window.HandlebarsProve.verify(html);
+			errors = window.HandlebarsProve.verifySync(html);
 			errors.forEach(function(error) {
 				var from = CodeMirror.Pos(error.start.line, error.start.column);
 				var to = CodeMirror.Pos(error.end.line, error.end.column);

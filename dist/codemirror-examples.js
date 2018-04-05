@@ -35859,52 +35859,48 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],4:[function(require,module,exports){
+(function (process){
 'use strict';
 
-// var log = require('./src/utilities').log;
-var Exceptions = require('./src/exceptions');
-var Handlebars = require('handlebars');
 var Helpers = require('./src/helpers');
-
-function parse(html) {
-	var ret;
-	try {
-		ret = Handlebars.parse(html);
-	} catch (e) {
-		ret = [Exceptions.parser(e, html)];
-	}
-	return ret;
-}
+var Parser = require('./src/parser');
 
 function isErrors(ast) {
 	return !!ast.length;
 }
 
-exports.verify = function (html, rules) {
+exports.verifySync = function (html, rules) {
 
 	// todo: extend defaults
 	if (!rules) rules = exports._configs;
 
 	var errors;
-	var ast = parse(html);
+	var ast = Parser.ast(html);
 
-	if (isErrors(ast)) {
-		errors = ast;
-		return errors;
-	}
+	// parser may not be able to convert to ast.
+	// if so return parser detected errors.
+	if (isErrors(ast)) return ast;
+
 	var nodes = ast.body || ast;
 	errors = Helpers.verify(nodes, rules);
 	return errors;
 };
 
-exports.register = Helpers.register;
+exports.verify = function (html, next) {
+
+	var issues = exports.verifySync(html);
+	process.nextTick(next, null, issues);
+};
+
+exports.registerHelper = Helpers.register;
 
 exports._configs = {
 	helpers: Helpers.configs
 };
 
 
-},{"./src/exceptions":54,"./src/helpers":56,"handlebars":35}],5:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./src/helpers":56,"./src/parser":58,"_process":3}],5:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 1.0.1 Copyright (c) 2011-2016, The Dojo Foundation All Rights Reserved.
@@ -48645,7 +48641,7 @@ exports.configs = {
 	}
 };
 
-},{"./formats":55,"./messages":57,"./selectors":58,"./walker":59,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
+},{"./formats":55,"./messages":57,"./selectors":59,"./walker":60,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
 'use strict';
 
 function word(val) {
@@ -48757,6 +48753,22 @@ exports.format = function(message, rule) {
 },{}],58:[function(require,module,exports){
 'use strict';
 
+var Exceptions = require('./exceptions');
+var Handlebars = require('handlebars');
+
+exports.ast = function(html) {
+	var ret;
+	try {
+		ret = Handlebars.parse(html);
+	} catch (e) {
+		ret = [Exceptions.parser(e, html)];
+	}
+	return ret;
+};
+
+},{"./exceptions":54,"handlebars":35}],59:[function(require,module,exports){
+'use strict';
+
 var find = require('lodash.find');
 
 function getSelectorNum(selector) {
@@ -48859,7 +48871,7 @@ exports.positional = function(astHelper, num) {
 	return params[num];
 };
 
-},{"lodash.find":36}],59:[function(require,module,exports){
+},{"lodash.find":36}],60:[function(require,module,exports){
 'use strict';
 
 var includes = require('lodash.includes');
@@ -64488,7 +64500,7 @@ Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 		function lintHandlebars(html) {
 			var errors, found = [];
 			if (!window.Handlebars || !window.HandlebarsProve) return found;
-			errors = window.HandlebarsProve.verify(html);
+			errors = window.HandlebarsProve.verifySync(html);
 			errors.forEach(function(error) {
 				var from = CodeMirror.Pos(error.start.line, error.start.column);
 				var to = CodeMirror.Pos(error.end.line, error.end.column);

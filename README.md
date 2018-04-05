@@ -10,3 +10,9 @@ npm install codemirror-examples --save-dev
 ```
 
 Then include the js and css in your web app.
+
+# Workflow
+
+```bash
+grunt build
+```
