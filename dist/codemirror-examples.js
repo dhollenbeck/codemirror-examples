@@ -48431,7 +48431,7 @@ function lint(rule, param) {
 	if (ok === false) {
 		return {
 			severity: rule.severity,
-			message: Messages.get('formats', rule),
+			message: Messages.get('formats', rule, [param]),
 			start: {
 				line: param.loc.start.line,
 				column: param.loc.start.column
@@ -48589,7 +48589,7 @@ exports.configs = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{@helper.name}} helper only supports two parameters. The highlighted parameter should be removed.',
+				message: 'The {{@helper.name}} helper only supports two parameters. The @param.names parameter(s) should be removed.',
 				formats: false
 			}
 		}
@@ -48604,7 +48604,7 @@ exports.configs = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{@helper.name}} block helper only supports a single parameter and should be an array value. The highlighted parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter and should be an array value. The @param.names parameter(s) should be removed.',
 				formats: false
 			}
 		}
@@ -48619,7 +48619,7 @@ exports.configs = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{@helper.name}} block helper only supports a single parameter. The hightlighted parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter. The @param.names parameter(s) should be removed.',
 				formats: false
 			}
 		}
@@ -48634,7 +48634,7 @@ exports.configs = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{@helper.name}} helper only supports a single parameter. The highlighted parameter should be removed.',
+				message: 'The {{@helper.name}} helper only supports a single parameter. The @param.names parameter(s) should be removed.',
 				formats: false
 			}
 		}
@@ -48652,7 +48652,7 @@ function word(val) {
 	return val;
 }
 
-function errorFormats(rule) {
+function errorFormats(rule, params) {
 	var message = (rule.block)
 		? 'The {{#@helper.name}} helper parameter `@rule.name` has an invalid value format.'
 		: 'The {{@helper.name}} helper parameter `@rule.name` has an invalid value format.';
@@ -48660,7 +48660,7 @@ function errorFormats(rule) {
 	// allow override message via rule.message
 	message = (rule.message)? rule.message : message;
 
-	return exports.format(message, rule);
+	return exports.format(message, rule, params);
 }
 
 function errorBlock(rule) {
@@ -48736,18 +48736,35 @@ function mismatch(str) {
 
 exports.get = function(type, rule, params) {
 	if (type === 'block') return errorBlock(rule);
-	if (type === 'formats') return errorFormats(rule);
+	if (type === 'formats') return errorFormats(rule, params);
 	if (type === 'param-missing') return errorParamMissing(rule, params);
 };
 
-exports.format = function(message, rule) {
+function paramNames(params) {
+	params = params || [];
+	var names = params.map(function(param) {
+		if (param.key) {
+			return param.key;
+		} else if (param.original) {
+			return param.original;
+		}
+		return param;
+	});
+	return names;
+}
+
+exports.format = function(message, rule, params) {
+
+	var names = paramNames(params);
+	names = '`' + names.join('`, `') + '`';
 
 	// handle blocks
 	if (rule.block) message = message.replace('{{@helper.name}}', '{{#@helper.name}}');
 
 	return message
 		.replace('@helper.name', rule.helper)
-		.replace('@rule.name', rule.name);
+		.replace('@rule.name', rule.name)
+		.replace('@param.names', names);
 };
 
 },{}],58:[function(require,module,exports){
