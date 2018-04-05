@@ -48360,9 +48360,6 @@ exports.lint = function(rule, param) {
 		ok = includes(allowed, type, param);
 		return ok;
 	} else if (isFunction(formats)) {
-
-		// todo: offset the loc lines to zero based.
-		// can we do this for all loc objects?
 		return formats(value, type, param);
 	} else {
 		return false;
@@ -48570,7 +48567,7 @@ exports.configs = {
 			extraneous: {
 				selector: '!',
 				severity: 'warning',
-				message: 'The {{@helper.name}} block helper only supports a single parameter. The hightlighted parameter should be removed.',
+				message: 'The {{@helper.name}} block helper only supports a single parameter. The @param.names parameter(s) should be removed.',
 				formats: false
 			}
 		}

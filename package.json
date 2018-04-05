@@ -1,6 +1,6 @@
 {
   "name": "codemirror-examples",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Codemirror examples including handlebars linting integration.",
   "main": "index.js",
   "scripts": {
@@ -25,7 +25,7 @@
     "handlebars": "^4.0.11",
     "htmlhint": "^0.9.13",
     "jshint": "^2.9.5",
-    "provejs-handlebars": "0.0.38"
+    "provejs-handlebars": "0.0.39"
   },
   "dependencies": {}
 }
