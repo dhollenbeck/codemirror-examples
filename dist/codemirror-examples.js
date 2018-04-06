@@ -35872,6 +35872,7 @@ function isErrors(ast) {
 exports.verifySync = function (html, rules) {
 
 	// todo: extend defaults
+	// Handlebars.Utils.extend(exports._config, rules);
 	if (!rules) rules = exports._configs;
 
 	var errors;
@@ -35900,7 +35901,7 @@ exports._configs = {
 
 
 }).call(this,require('_process'))
-},{"./src/helpers":56,"./src/parser":58,"_process":3}],5:[function(require,module,exports){
+},{"./src/helpers":55,"./src/parser":57,"_process":3}],5:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 1.0.1 Copyright (c) 2011-2016, The Dojo Foundation All Rights Reserved.
@@ -36697,7 +36698,7 @@ exports['default'] = CodeGen;
 module.exports = exports['default'];
 
 
-},{"../utils":34,"source-map":43}],12:[function(require,module,exports){
+},{"../utils":34,"source-map":42}],12:[function(require,module,exports){
 /* eslint-disable new-cap */
 
 'use strict';
@@ -44614,165 +44615,6 @@ function values(object) {
 module.exports = includes;
 
 },{}],39:[function(require,module,exports){
-(function (global){
-/**
- * Lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright JS Foundation and other contributors <https://js.foundation/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** `Object#toString` result references. */
-var asyncTag = '[object AsyncFunction]',
-    funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]',
-    nullTag = '[object Null]',
-    proxyTag = '[object Proxy]',
-    undefinedTag = '[object Undefined]';
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var nativeObjectToString = objectProto.toString;
-
-/** Built-in value references. */
-var Symbol = root.Symbol,
-    symToStringTag = Symbol ? Symbol.toStringTag : undefined;
-
-/**
- * The base implementation of `getTag` without fallbacks for buggy environments.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */
-function baseGetTag(value) {
-  if (value == null) {
-    return value === undefined ? undefinedTag : nullTag;
-  }
-  return (symToStringTag && symToStringTag in Object(value))
-    ? getRawTag(value)
-    : objectToString(value);
-}
-
-/**
- * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the raw `toStringTag`.
- */
-function getRawTag(value) {
-  var isOwn = hasOwnProperty.call(value, symToStringTag),
-      tag = value[symToStringTag];
-
-  try {
-    value[symToStringTag] = undefined;
-    var unmasked = true;
-  } catch (e) {}
-
-  var result = nativeObjectToString.call(value);
-  if (unmasked) {
-    if (isOwn) {
-      value[symToStringTag] = tag;
-    } else {
-      delete value[symToStringTag];
-    }
-  }
-  return result;
-}
-
-/**
- * Converts `value` to a string using `Object.prototype.toString`.
- *
- * @private
- * @param {*} value The value to convert.
- * @returns {string} Returns the converted string.
- */
-function objectToString(value) {
-  return nativeObjectToString.call(value);
-}
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a function, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  if (!isObject(value)) {
-    return false;
-  }
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 9 which returns 'object' for typed arrays and other constructors.
-  var tag = baseGetTag(value);
-  return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return value != null && (type == 'object' || type == 'function');
-}
-
-module.exports = isFunction;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],40:[function(require,module,exports){
 /**
  * lodash 3.0.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -44811,7 +44653,7 @@ function isObject(value) {
 
 module.exports = isObject;
 
-},{}],41:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /**
  * lodash 3.0.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -44843,7 +44685,7 @@ function isUndefined(value) {
 
 module.exports = isUndefined;
 
-},{}],42:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 /**
  * lodash (Custom Build) <https://lodash.com/>
  * Build: `lodash modularize exports="npm" -o ./`
@@ -45246,7 +45088,7 @@ function keys(object) {
 
 module.exports = keys;
 
-},{}],43:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 /*
  * Copyright 2009-2011 Mozilla Foundation and contributors
  * Licensed under the New BSD license. See LICENSE.txt or:
@@ -45256,7 +45098,7 @@ exports.SourceMapGenerator = require('./source-map/source-map-generator').Source
 exports.SourceMapConsumer = require('./source-map/source-map-consumer').SourceMapConsumer;
 exports.SourceNode = require('./source-map/source-node').SourceNode;
 
-},{"./source-map/source-map-consumer":50,"./source-map/source-map-generator":51,"./source-map/source-node":52}],44:[function(require,module,exports){
+},{"./source-map/source-map-consumer":49,"./source-map/source-map-generator":50,"./source-map/source-node":51}],43:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -45365,7 +45207,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./util":53,"amdefine":5}],45:[function(require,module,exports){
+},{"./util":52,"amdefine":5}],44:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -45513,7 +45355,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./base64":46,"amdefine":5}],46:[function(require,module,exports){
+},{"./base64":45,"amdefine":5}],45:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -45588,7 +45430,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":5}],47:[function(require,module,exports){
+},{"amdefine":5}],46:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -45707,7 +45549,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":5}],48:[function(require,module,exports){
+},{"amdefine":5}],47:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2014 Mozilla Foundation and contributors
@@ -45795,7 +45637,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./util":53,"amdefine":5}],49:[function(require,module,exports){
+},{"./util":52,"amdefine":5}],48:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -45917,7 +45759,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":5}],50:[function(require,module,exports){
+},{"amdefine":5}],49:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -46996,7 +46838,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":44,"./base64-vlq":45,"./binary-search":47,"./quick-sort":49,"./util":53,"amdefine":5}],51:[function(require,module,exports){
+},{"./array-set":43,"./base64-vlq":44,"./binary-search":46,"./quick-sort":48,"./util":52,"amdefine":5}],50:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -47397,7 +47239,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":44,"./base64-vlq":45,"./mapping-list":48,"./util":53,"amdefine":5}],52:[function(require,module,exports){
+},{"./array-set":43,"./base64-vlq":44,"./mapping-list":47,"./util":52,"amdefine":5}],51:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -47813,7 +47655,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./source-map-generator":51,"./util":53,"amdefine":5}],53:[function(require,module,exports){
+},{"./source-map-generator":50,"./util":52,"amdefine":5}],52:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -48185,7 +48027,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":5}],54:[function(require,module,exports){
+},{"amdefine":5}],53:[function(require,module,exports){
 'use strict';
 
 var regex1 = /^Parse error on line ([0-9]+)+:\n([^\n].*)\n([^\n].*)\n(.*)$/;
@@ -48312,11 +48154,12 @@ exports.parser = function (e, html) {
 	return parsed;
 };
 
-},{"./messages":57}],55:[function(require,module,exports){
+},{"./messages":56}],54:[function(require,module,exports){
 'use strict';
 
+var Handlebars = require('handlebars');
 var includes = require('lodash.includes');
-var isFunction = require('lodash.isfunction');
+var isFunction = Handlebars.Utils.isFunction;
 var isUndefined = require('lodash.isundefined');
 
 function getValueType(param) {
@@ -48366,18 +48209,18 @@ exports.lint = function(rule, param) {
 	}
 };
 
-},{"lodash.includes":38,"lodash.isfunction":39,"lodash.isundefined":41}],56:[function(require,module,exports){
+},{"handlebars":35,"lodash.includes":38,"lodash.isundefined":40}],55:[function(require,module,exports){
 'use strict';
 
+var Handlebars = require('handlebars');
 var Selectors = require('./selectors');
 var Formats = require('./formats');
 var Walker = require('./walker');
 var Messages = require('./messages');
-var isFunction = require('lodash.isfunction');
+var isFunction = Handlebars.Utils.isFunction;
 var isObject = require('lodash.isobject');
 var forOwn = require('lodash.forown');
 var keys = require('lodash.keys');
-
 
 function pruneHelpers(node) {
 
@@ -48638,7 +48481,7 @@ exports.configs = {
 	}
 };
 
-},{"./formats":55,"./messages":57,"./selectors":59,"./walker":60,"lodash.forown":37,"lodash.isfunction":39,"lodash.isobject":40,"lodash.keys":42}],57:[function(require,module,exports){
+},{"./formats":54,"./messages":56,"./selectors":58,"./walker":59,"handlebars":35,"lodash.forown":37,"lodash.isobject":39,"lodash.keys":41}],56:[function(require,module,exports){
 'use strict';
 
 function word(val) {
@@ -48764,7 +48607,7 @@ exports.format = function(message, rule, params) {
 		.replace('@param.names', names);
 };
 
-},{}],58:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 'use strict';
 
 var Exceptions = require('./exceptions');
@@ -48780,7 +48623,7 @@ exports.ast = function(html) {
 	return ret;
 };
 
-},{"./exceptions":54,"handlebars":35}],59:[function(require,module,exports){
+},{"./exceptions":53,"handlebars":35}],58:[function(require,module,exports){
 'use strict';
 
 var find = require('lodash.find');
@@ -48885,33 +48728,32 @@ exports.positional = function(astHelper, num) {
 	return params[num];
 };
 
-},{"lodash.find":36}],60:[function(require,module,exports){
+},{"lodash.find":36}],59:[function(require,module,exports){
 'use strict';
 
+var Handlebars = require('handlebars');
 var includes = require('lodash.includes');
 
-function isHelper(node, names) {
-	if (node.type !== 'MustacheStatement' && node.type !== 'BlockStatement') return false;
-	if (node.params.length > 0) return true;
-	if (node.hash !== undefined) return true;
-	if (includes(names, node.path.original)) return true; // helper with no hash or params
+function isHelper(node, knownHelpers) {
+	if (Handlebars.AST.helpers.helperExpression(node)) return true;
+	if (node.path && includes(knownHelpers, node.path.original)) return true;
 	return false;
 }
 
-exports.helpers = function(tree, names, helpers) {
+exports.helpers = function(tree, knownHelpers, helpers) {
 
 	var nodes = tree.body || tree;
 
 	// loop each parent nodes
 	nodes.forEach(function(node) {
 		// if helper push to helpers array
-		if (isHelper(node, names)) helpers.push(node);
+		if (isHelper(node, knownHelpers)) helpers.push(node);
 		// if child nodes recursively call this method
-		if (node.program) exports.helpers(node.program, names, helpers);
+		if (node.program) exports.helpers(node.program, knownHelpers, helpers);
 	});
 };
 
-},{"lodash.includes":38}]},{},[4])(4)
+},{"handlebars":35,"lodash.includes":38}]},{},[4])(4)
 });
 
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
