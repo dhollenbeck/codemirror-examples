@@ -48388,7 +48388,7 @@ function lintHelpers(helpers, rules) {
 exports.verify = function (nodes, rules) {
 	var helpers = [];
 	var names = keys(rules.helpers);
-	Walker.helpers(nodes, names, helpers);
+	Walker.helpers3(nodes, names, helpers);
 	helpers = helpers.map(pruneHelpers);
 	var errors = lintHelpers(helpers, rules);
 	return errors;
@@ -48733,24 +48733,44 @@ exports.positional = function(astHelper, num) {
 
 var Handlebars = require('handlebars');
 var includes = require('lodash.includes');
+var helperExpression = Handlebars.AST.helpers.helperExpression;
 
 function isHelper(node, knownHelpers) {
-	if (Handlebars.AST.helpers.helperExpression(node)) return true;
+	if (helperExpression(node)) return true;
 	if (node.path && includes(knownHelpers, node.path.original)) return true;
 	return false;
 }
 
-exports.helpers = function(tree, knownHelpers, helpers) {
+exports.helpers3 = function recursive(tree, knowHelpers, res) {
+	var statements = tree.body || tree;
+	var knowns = knowHelpers;
 
-	var nodes = tree.body || tree;
+	statements.forEach(function (stmt) {
+		if (!stmt) return;
 
-	// loop each parent nodes
-	nodes.forEach(function(node) {
-		// if helper push to helpers array
-		if (isHelper(node, knownHelpers)) helpers.push(node);
-		// if child nodes recursively call this method
-		if (node.program) exports.helpers(node.program, knownHelpers, helpers);
+		if (isHelper(stmt, knowns)) {
+			res.push(stmt);
+		}
+		// subexpressions as param HashPair value
+		if (stmt.value && helperExpression(stmt.value)) {
+			res.push(stmt.value);
+		}
+		if (stmt.program && stmt.program.body) {
+			recursive(stmt.program.body, knowns, res);
+		}
+		if (stmt.inverse && stmt.inverse.body) {
+			recursive(stmt.inverse.body, knowns, res);
+		}
+		// support subexpressions in hash pairs
+		if (stmt.hash && stmt.hash.pairs) {
+			recursive(stmt.hash.pairs, knowns, res);
+		}
+		// support subexpressions in params
+		if (stmt.params) {
+			recursive(stmt.params, knowns, res);
+		}
 	});
+	return res;
 };
 
 },{"handlebars":35,"lodash.includes":38}]},{},[4])(4)
