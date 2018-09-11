@@ -41,5 +41,11 @@ $.fn.editor = function (options) {
 		if (textarea.validate) textarea.validate();
 	});
 
+	console.log('got here');
+
+	if (options.readOnly) {
+		$(editor.getWrapperElement()).addClass('readonly');
+	}
+
 	return editor;
 };
