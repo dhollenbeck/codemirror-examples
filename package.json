@@ -1,6 +1,6 @@
 {
   "name": "codemirror-examples",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "Codemirror examples including handlebars linting integration.",
   "main": "index.js",
   "scripts": {
@@ -19,9 +19,9 @@
   "devDependencies": {
     "codemirror": "^5.48.2",
     "csslint": "^1.0.5",
-    "grunt": "^1.0.2",
+    "grunt": "^1.0.4",
     "grunt-contrib-concat": "^1.0.1",
-    "grunt-eslint": "^20.1.0",
+    "grunt-eslint": "^22.0.0",
     "handlebars": "^4.1.2",
     "htmlhint": "^0.11.0",
     "jshint": "^2.10.2",

@@ -19,7 +19,7 @@ module.exports = function(grunt) {
 
                 // 3rd party libs
                 './node_modules/csslint/dist/csslint.js',
-                './node_modules/htmlhint/lib/htmlhint.js',
+                './node_modules/htmlhint/dist/htmlhint.js',
                 './node_modules/jshint/dist/jshint.js',
                 './node_modules/handlebars/dist/handlebars.min.js',
                 // './node_modules/handlebars-error-parser/index.js',

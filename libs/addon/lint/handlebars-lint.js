@@ -19,7 +19,7 @@ Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 		function lintHtml(html) {
 			var errors, found = [];
 			if (!window.HTMLHint) return found;
-			errors = HTMLHint.verify(html, ruleSets);
+			errors = HTMLHint.default.verify(html, ruleSets);
 			errors.forEach(function(error) {
 				var startLine = error.line - 1;
 				var endLine = error.line - 1;
