@@ -64451,13 +64451,15 @@ Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 				var endCol = error.col;
 				var from = CodeMirror.Pos(startLine, startCol);
 				var to = CodeMirror.Pos(endLine, endCol);
-
-				found.push({
+				var err = {
 					from: from,
 					to: to,
 					message: error.message,
 					severity: error.type
-				});
+				};
+				var ignore = isSpecialChars(error) &&  isHandlebarsExpression(error);
+
+				if (!ignore) found.push(err);
 			});
 			return found;
 		}
@@ -64478,6 +64480,48 @@ Copyright (c) 2018 Dan Hollenbeck (https://github.com/dhollenbeck)
 				});
 			});
 			return found;
+		}
+
+
+		/*
+		col: 20
+evidence: "<h1 class="foobar">>{{echo 'hello world'}}</h1>"
+line: 2
+message: "Special characters must be escaped : [ > ]."
+raw: ">{{echo 'hello world'}}"
+rule: {id: "spec-char-escape", description: "Special characters must be escaped.", link: "https://github.com/yaniswang/HTMLHint/wiki/spec-char-escape"}
+type: "error"
+		*/
+
+		function isSpecialChars(error) {
+			return error.rule.id === 'spec-char-escape';
+		}
+
+		function isHandlebarsExpression(error) {
+			var pos = error.col;
+			var line = error.evidence;
+			var left = line.substring(0, pos);
+			var right = line.substring(pos);
+			var isOpenExpression = isHandlebarsExpressionOpen(left);
+			var isCloseExpression = isHandlebarsExpressionClose(right);
+			return isOpenExpression || isCloseExpression;
+		}
+
+		function isHandlebarsExpressionOpen (str) {
+			var posOpen = str.lastIndexOf('{{');
+			var posClose = str.lastIndexOf('}}');
+			if (posOpen === -1) return false;
+			if (posOpen && posClose === -1) return true;
+			if (posOpen > posClose) return true;
+			return false;
+		}
+		function isHandlebarsExpressionClose (str) {
+			var posOpen = str.indexOf('{{');
+			var posClose = str.indexOf('}}');
+			if (posClose === -1) return false;
+			if (posClose && posOpen === -1) return true;
+			if (posClose < posOpen) return true;
+			return false;
 		}
 
 		function linterSync(html) {
