@@ -511,3 +511,5 @@ li.CodeMirror-hint-active {
   background: #08f;
   color: white;
 }
+
+.CodeMirror-lines {min-height: 50px;}
