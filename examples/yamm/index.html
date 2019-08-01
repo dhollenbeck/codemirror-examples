@@ -42,7 +42,9 @@
 		$(function () {
 			//return;
 			var hbs = $('textarea[mode="handlebars"]');
-			var editor = hbs.editor();
+			var editor = hbs.editor({
+				height: '300'
+			});
 
 			// validation
 			var form = $('form');
@@ -238,7 +240,7 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div class="fullscreen">
+					<div class="fullscreen-wrapper">
 
 						<!-- start of mega menu -->
 						<div class="navbar navbar-default yamm m-b-0" role="navigation">

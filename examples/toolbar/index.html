@@ -9,7 +9,8 @@
 	<title>Toolbar</title>
 
 	<!-- Bootstrap -->
-	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+		integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 
 	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
 	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -22,81 +23,93 @@
 	<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 	<!-- Include all compiled plugins (below), or include individual files as needed -->
-	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
+		integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+		crossorigin="anonymous"></script>
 
 	<!-- start of codemirror -->
 	<link rel="stylesheet" href="../../dist/codemirror-examples.css">
-    <script src="../../dist/codemirror-examples.js"></script>
-    <script src="https://provejs.github.io/provejs-jquery/examples/prove.js"></script>
+	<script src="../../dist/codemirror-examples.js"></script>
+	<script src="https://provejs.github.io/provejs-jquery/examples/prove.js"></script>
 	<script src="https://provejs.github.io/provejs-jquery/examples/decorator.js"></script>
 
 	<script>
-	$(function(){
-        //return;
-		var hbs = $('textarea[mode="handlebars"]');
-		var editor = hbs.editor();
+		$(function () {
+			//return;
+			var hbs = $('textarea[mode="handlebars"]');
+			var editor = hbs.editor();
 
-		// validation
-		var form = $('form');
-		form.prove({
-			fields: {
-				hbs: {
-					selector: 'textarea[mode="handlebars"]',
-					validators: {
-						proveCallback: {
-							message: 'Please fix the linting errors shown above.',
-							callback: function(fieldValue) {
-								var marks = editor.state.lint.marked;
-								return (marks.length === 0);
+			// validation
+			var form = $('form');
+			form.prove({
+				fields: {
+					hbs: {
+						selector: 'textarea[mode="handlebars"]',
+						validators: {
+							proveCallback: {
+								message: 'Please fix the linting errors shown above.',
+								callback: function (fieldValue) {
+									var marks = editor.state.lint.marked;
+									return (marks.length === 0);
+								}
 							}
 						}
 					}
 				}
+			});
+			form.decorate('bootstrap');
+
+			$('#commands a').click(function (e) {
+				e.preventDefault();
+				var cmd = $(this).data('cmd');
+				editor.execCommand(cmd);
+			});
+			$('#fields a, #helpers a, #html a').click(function (e) {
+				e.preventDefault();
+
+				var lbrace = String.fromCharCode(123);
+				var rbrace = String.fromCharCode(125);
+				var str = $(this).data('cmd') || '';
+				str = str.replace(/\[/g, lbrace);
+				str = str.replace(/]/g, rbrace);
+				str = str.replace(/\\n/g, '\n');
+				str = str.replace(/\\t/g, '\t');
+				str = str.replace(/&lt;/g, '<');
+				str = str.replace(/&gt;/g, '>');
+				insertString(editor, str);
+			});
+
+			function insertString(editor, str) {
+				var selection, doc, cursor, pos;
+				selection = editor.getSelection();
+				if (selection.length > 0) {
+					editor.replaceSelection(str);
+				} else {
+					doc = editor.getDoc();
+					cursor = doc.getCursor();
+					pos = {
+						line: cursor.line,
+						ch: cursor.ch
+					}
+					doc.replaceRange(str, pos);
+				}
 			}
 		});
-        form.decorate('bootstrap');
-
-        $('#commands a').click(function(e) {
-            e.preventDefault();
-            var cmd = $(this).data('cmd');
-            editor.execCommand(cmd);
-        });
-		$('#fields a, #helpers a, #html a').click(function (e) {
-			e.preventDefault();
-
-            var lbrace = String.fromCharCode(123);
-            var rbrace = String.fromCharCode(125);
-			var str = $(this).data('cmd') || '';
-			str = str.replace(/\[/g, lbrace);
-			str = str.replace(/]/g, rbrace);
-			str = str.replace(/\\n/g, '\n');
-			str = str.replace(/\\t/g, '\t');
-			str = str.replace(/&lt;/g, '<');
-			str = str.replace(/&gt;/g, '>');
-			insertString(editor, str);
-        });
-
-        function insertString(editor, str){
-            var selection, doc, cursor, pos;
-            selection = editor.getSelection();
-            if (selection.length>0){
-                editor.replaceSelection(str);
-            } else {
-                doc = editor.getDoc();
-                cursor = doc.getCursor();
-                pos = {
-                    line: cursor.line,
-                    ch: cursor.ch
-                }
-                doc.replaceRange(str, pos);
-            }
-        }
-	});
 	</script>
 
 	<style>
-    .CodeMirror {border: 1px solid #eee; min-height: 50px;}
-    .CodeMirrorToobar {border: 1px solid #eee; border-bottom: none; min-height: 26px;padding: 2px; background-color: #f7f7f7;}
+		.CodeMirror {
+			border: 1px solid #eee;
+			min-height: 50px;
+		}
+
+		.CodeMirrorToobar {
+			border: 1px solid #eee;
+			border-bottom: none;
+			min-height: 26px;
+			padding: 2px;
+			background-color: #f7f7f7;
+		}
 	</style>
 
 </head>
@@ -119,75 +132,119 @@
 
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
-                    <div class="CodeMirrorToobar">
-                        <div class="pull-right dropdown">
 
-                            <span class="dropdown">
-                                <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">Helpers
-                                <span class="caret"></span></button>
-                                <ul class="dropdown-menu dropdown-menu-right" id="helpers">
-                                    <li class="dropdown-header">Text</li>
-                                    <li><a href="#" data-cmd="[[upper field]] "><strong>&lbrace;&lbrace;upper field&rbrace;&rbrace;</strong> - upper case.</a></li>
-                                    <li><a href="#" data-cmd="[[lower field]] "><strong>&lbrace;&lbrace;lower field&rbrace;&rbrace;</strong> - lower case.</a></li>
-                                    <li class="dropdown-header">Links</li>
-                                    <li><a href="#" data-cmd="[[url download 'Title']]"><strong>&lbrace;&lbrace;url download 'Title'&rbrace;&rbrace;</strong> - download link.</a></li>
-                                    <li class="dropdown-header">Logic</li>
-                                    <li><a href="#" data-cmd="[[#if field]] [[else]] [[/if]]"><strong>&lbrace;&lbrace;#if field&rbrace;&rbrace; &lbrace;&lbrace;else&rbrace;&rbrace; &lbrace;&lbrace;/if&rbrace;&rbrace;</strong> - if else logic.</a></li>
-                                    <li><a href="#" data-cmd="[[#each downloads]]\n\t... do someting\n[[/each]]"><strong>&lbrace;&lbrace;#each downloads&rbrace;&rbrace; &lbrace;&lbrace;/each&rbrace;&rbrace;</strong> - loop array.</a></li>
-                                </ul>
-                            </span>
-                            <span class="dropdown">
-                                <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">Fields
-                                <span class="caret"></span></button>
-                                <ul class="dropdown-menu dropdown-menu-right" id="fields">
-                                    <li class="dropdown-header">User</li>
-                                    <li><a href="#" data-cmd="[[user.firstname]] "><strong>&lbrace;&lbrace;user.firstname&rbrace;&rbrace;</strong> - user first name.</a></li>
-                                    <li><a href="#" data-cmd="[[user.lastname]] "><strong>&lbrace;&lbrace;user.lastname&rbrace;&rbrace;</strong> - user last name.</a></li>
-                                    <li><a href="#" data-cmd="[[user.email]] "><strong>&lbrace;&lbrace;user.email&rbrace;&rbrace;</strong> - user email.</a></li>
-                                    <li><a href="#" data-cmd="[[user.title]] "><strong>&lbrace;&lbrace;user.title&rbrace;&rbrace;</strong> - user title.</a></li>
-                                    <li><a href="#" data-cmd="[[user.dob]] "><strong>&lbrace;&lbrace;user.dob&rbrace;&rbrace;</strong> - user date of birth.</a></li>
-                                    <li class="dropdown-header">Course</li>
-                                    <li><a href="#" data-cmd="[[course.title]] "><strong>&lbrace;&lbrace;course.title&rbrace;&rbrace;</strong> - course title.</a></li>
-                                    <li><a href="#" data-cmd="[[course.duration]] "><strong>&lbrace;&lbrace;course.duration&rbrace;&rbrace;</strong> - course duration.</a></li>
-                                    <li><a href="#" data-cmd="[[course.credits]] "><strong>&lbrace;&lbrace;course.credits&rbrace;&rbrace;</strong> - course credits.</a></li>
-                                </ul>
-                            </span>
-                            <span class="dropdown">
-                                <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">HTML
-                                <span class="caret"></span></button>
-                                <ul class="dropdown-menu dropdown-menu-right" id="html">
-                                    <li class="dropdown-header">Tags</li>
-                                    <li><a href="#" data-cmd="&lt;h1&gt;your header&lt;/h1&gt;\n"><strong>&lt;h1&gt;your header&lt;/h1&gt;</strong> - large header.</a></li>
-                                    <li><a href="#" data-cmd="&lt;h2&gt;your header&lt;/h2&gt;\n"><strong>&lt;h2&gt;your header&lt;/h2&gt;</strong> - medimum header.</a></li>
-                                    <li><a href="#" data-cmd="&lt;p&gt;your text&lt;/p&gt;\n"><strong>&lt;p&gt;your text&lt;/p&gt;</strong> - paragraph of text.</a></li>
-                                    <li><a href="#" data-cmd="&lt;b&gt;your text&lt;/b&gt;\n"><strong>&lt;b&gt;your text&lt;/b&gt;</strong> - bold text.</a></li>
-                                </ul>
-                            </span>
-                            <span class="dropdown">
-                                <button class="btn btn-default btn-xs dropdown-toggle" type="button" data-toggle="dropdown">Commands
-                                <span class="caret"></span></button>
-                                <ul class="dropdown-menu dropdown-menu-right" id="commands">
-                                    <li><a href="#selectAll" data-cmd="selectAll"><strong>Select All</strong> - Ctrl-A</a></li>
-                                    <li><a href="#deleteLine" data-cmd="deleteLine"><strong>Delete Line</strong> - Ctrl-D</a></li>
-                                    <li><a href="#updo" data-cmd="undo"><strong>Undo</strong> - Ctrl-Z</a></li>
-                                    <li><a href="#redo" data-cmd="redo"><strong>Redo</strong> - Ctrl-Y</a></li>
-                                    <li role="separator" class="divider"></li>
-                                    <li><a href="#find" data-cmd="find"><strong>Find</strong> - Ctrl-F</a></li>
-                                    <li><a href="#findNext" data-cmd="findNext"><strong>Find Next</strong> - Ctrl-G</a></li>
-                                    <li><a href="#findPrev" data-cmd="findPrev"><strong>Find Prev</strong> - Shift-Ctrl-G</a></li>
-                                    <li><a href="#replace" data-cmd="replace"><strong>Replace</strong> - Shift-Ctrl-F</a></li>
-                                    <li><a href="#replaceAll" data-cmd="replaceAll"><strong>Replace All</strong> - Shift-Ctrl-R</a></li>
-                                    <li role="separator" class="divider"></li>
-                                    <li><a target="_blank" href="https://codemirror.net/doc/manual.html#commands">More ...</a></li>
-                                </ul>
-                            </span>
-                        </div>
-                    </div>
-					<textarea class="form-control" name="html" mode="handlebars">
-{{#each foobars extraThing}}
-<h1 class="foobar">{{echo 'hello world'}</h1>
-{{/if}}
-					</textarea>
+					<div class="fullscreen-wrapper">
+
+						<div class="CodeMirrorToobar">
+							<div class="pull-right dropdown">
+
+								<span class="dropdown">
+									<button class="btn btn-default btn-xs dropdown-toggle" type="button"
+										data-toggle="dropdown">Helpers
+										<span class="caret"></span></button>
+									<ul class="dropdown-menu dropdown-menu-right" id="helpers">
+										<li class="dropdown-header">Text</li>
+										<li><a href="#" data-cmd="[[upper field]] "><strong>&lbrace;&lbrace;upper
+													field&rbrace;&rbrace;</strong> - upper case.</a></li>
+										<li><a href="#" data-cmd="[[lower field]] "><strong>&lbrace;&lbrace;lower
+													field&rbrace;&rbrace;</strong> - lower case.</a></li>
+										<li class="dropdown-header">Links</li>
+										<li><a href="#" data-cmd="[[url download 'Title']]"><strong>&lbrace;&lbrace;url
+													download 'Title'&rbrace;&rbrace;</strong> - download link.</a></li>
+										<li class="dropdown-header">Logic</li>
+										<li><a href="#"
+												data-cmd="[[#if field]] [[else]] [[/if]]"><strong>&lbrace;&lbrace;#if
+													field&rbrace;&rbrace; &lbrace;&lbrace;else&rbrace;&rbrace;
+													&lbrace;&lbrace;/if&rbrace;&rbrace;</strong> - if else logic.</a></li>
+										<li><a href="#"
+												data-cmd="[[#each downloads]]\n\t... do someting\n[[/each]]"><strong>&lbrace;&lbrace;#each
+													downloads&rbrace;&rbrace; &lbrace;&lbrace;/each&rbrace;&rbrace;</strong>
+												- loop array.</a></li>
+									</ul>
+								</span>
+								<span class="dropdown">
+									<button class="btn btn-default btn-xs dropdown-toggle" type="button"
+										data-toggle="dropdown">Fields
+										<span class="caret"></span></button>
+									<ul class="dropdown-menu dropdown-menu-right" id="fields">
+										<li class="dropdown-header">User</li>
+										<li><a href="#"
+												data-cmd="[[user.firstname]] "><strong>&lbrace;&lbrace;user.firstname&rbrace;&rbrace;</strong>
+												- user first name.</a></li>
+										<li><a href="#"
+												data-cmd="[[user.lastname]] "><strong>&lbrace;&lbrace;user.lastname&rbrace;&rbrace;</strong>
+												- user last name.</a></li>
+										<li><a href="#"
+												data-cmd="[[user.email]] "><strong>&lbrace;&lbrace;user.email&rbrace;&rbrace;</strong>
+												- user email.</a></li>
+										<li><a href="#"
+												data-cmd="[[user.title]] "><strong>&lbrace;&lbrace;user.title&rbrace;&rbrace;</strong>
+												- user title.</a></li>
+										<li><a href="#"
+												data-cmd="[[user.dob]] "><strong>&lbrace;&lbrace;user.dob&rbrace;&rbrace;</strong>
+												- user date of birth.</a></li>
+										<li class="dropdown-header">Course</li>
+										<li><a href="#"
+												data-cmd="[[course.title]] "><strong>&lbrace;&lbrace;course.title&rbrace;&rbrace;</strong>
+												- course title.</a></li>
+										<li><a href="#"
+												data-cmd="[[course.duration]] "><strong>&lbrace;&lbrace;course.duration&rbrace;&rbrace;</strong>
+												- course duration.</a></li>
+										<li><a href="#"
+												data-cmd="[[course.credits]] "><strong>&lbrace;&lbrace;course.credits&rbrace;&rbrace;</strong>
+												- course credits.</a></li>
+									</ul>
+								</span>
+								<span class="dropdown">
+									<button class="btn btn-default btn-xs dropdown-toggle" type="button"
+										data-toggle="dropdown">HTML
+										<span class="caret"></span></button>
+									<ul class="dropdown-menu dropdown-menu-right" id="html">
+										<li class="dropdown-header">Tags</li>
+										<li><a href="#" data-cmd="&lt;h1&gt;your header&lt;/h1&gt;\n"><strong>&lt;h1&gt;your
+													header&lt;/h1&gt;</strong> - large header.</a></li>
+										<li><a href="#" data-cmd="&lt;h2&gt;your header&lt;/h2&gt;\n"><strong>&lt;h2&gt;your
+													header&lt;/h2&gt;</strong> - medimum header.</a></li>
+										<li><a href="#" data-cmd="&lt;p&gt;your text&lt;/p&gt;\n"><strong>&lt;p&gt;your
+													text&lt;/p&gt;</strong> - paragraph of text.</a></li>
+										<li><a href="#" data-cmd="&lt;b&gt;your text&lt;/b&gt;\n"><strong>&lt;b&gt;your
+													text&lt;/b&gt;</strong> - bold text.</a></li>
+									</ul>
+								</span>
+								<span class="dropdown">
+									<button class="btn btn-default btn-xs dropdown-toggle" type="button"
+										data-toggle="dropdown">Commands
+										<span class="caret"></span></button>
+									<ul class="dropdown-menu dropdown-menu-right" id="commands">
+										<li><a href="#selectAll" data-cmd="selectAll"><strong>Select All</strong> -
+												Ctrl-A</a></li>
+										<li><a href="#deleteLine" data-cmd="deleteLine"><strong>Delete Line</strong> -
+												Ctrl-D</a></li>
+										<li><a href="#updo" data-cmd="undo"><strong>Undo</strong> - Ctrl-Z</a></li>
+										<li><a href="#redo" data-cmd="redo"><strong>Redo</strong> - Ctrl-Y</a></li>
+										<li role="separator" class="divider"></li>
+										<li><a href="#find" data-cmd="find"><strong>Find</strong> - Ctrl-F</a></li>
+										<li><a href="#findNext" data-cmd="findNext"><strong>Find Next</strong> - Ctrl-G</a>
+										</li>
+										<li><a href="#findPrev" data-cmd="findPrev"><strong>Find Prev</strong> -
+												Shift-Ctrl-G</a></li>
+										<li><a href="#replace" data-cmd="replace"><strong>Replace</strong> -
+												Shift-Ctrl-F</a></li>
+										<li><a href="#replaceAll" data-cmd="replaceAll"><strong>Replace All</strong> -
+												Shift-Ctrl-R</a></li>
+										<li role="separator" class="divider"></li>
+										<li><a target="_blank" href="https://codemirror.net/doc/manual.html#commands">More
+												...</a></li>
+									</ul>
+								</span>
+							</div>
+						</div>
+						<textarea class="form-control" name="html" mode="handlebars">
+	{{#each foobars extraThing}}
+	<h1 class="foobar">{{echo 'hello world'}</h1>
+	{{/if}}
+						</textarea>
+					</div>
 				</div>
 			</div>
 

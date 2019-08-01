@@ -1,6 +1,6 @@
 {
   "name": "codemirror-examples",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Codemirror examples including handlebars linting integration.",
   "main": "index.js",
   "scripts": {
