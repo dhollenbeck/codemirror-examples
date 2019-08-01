@@ -3,7 +3,6 @@ $.fn.editor = function (options) {
 	var textarea, mode, editor;
 
 	options = options || {};
-	options.height = options.height || 'auto';
 
 	textarea = $(this);
 	mode = options.mode || textarea.attr('mode') || 'html';
@@ -26,8 +25,22 @@ $.fn.editor = function (options) {
 		dragDrop: true,
 		lint: true,
 		viewportMargin: Infinity,
-		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter']
+		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+		extraKeys: {
+			'F11': function(cm) {
+				cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+			},
+			'Esc': function(cm) {
+				if (cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+			}
+		  }
 	});
+
+	// Set editor size. We set the editor.setSize(null, 'auto') to enable
+	// autor esize. The editor.setSize() method sets style attribute of the
+	// <div class="CodeMirror cm-s-default CodeMirror-wrap" style="height: auto;">
+	// See: https://codemirror.net/demo/resize.html
+	options.height = options.height || 'auto';
 	editor.setSize(null, options.height);
 
 	editor.on('change', function (editor) {
