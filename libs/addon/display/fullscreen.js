@@ -18,16 +18,22 @@
 		else setNormal(cm);
 	});
 
-	function getWrapper(cm) {
+	function getEdit(cm) {
+		return cm.getWrapperElement();
+	}
+	function getWrap(cm) {
 		var el1 = cm.getWrapperElement();
 		var el2 = $(el1).closest('.fullscreen');
 		return (el2.length)? el2[0] : el1;
 	}
+	function getHtml() {
+		return document.documentElement;
+	}
 
 	function setFullscreen(cm) {
-		var elEdit = cm.getWrapperElement();
-		var elWrap = $(elEdit).closest('.fullscreen')[0]; // code error
-		var elHtml = document.documentElement;
+		var elHtml = getHtml(cm);
+		var elWrap = getWrap(cm);
+		var elEdit = getEdit(cm);
 
 		// save states
 		cm.state.fullScreenRestoreWrapper = {
@@ -47,7 +53,7 @@
 	}
 
 	function setNormal(cm) {
-		var wrap = getWrapper(cm);
+		var wrap = getWrap(cm);
 
 		// restore <html> tag
 		document.documentElement.style.overflow = '';
