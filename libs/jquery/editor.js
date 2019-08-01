@@ -12,6 +12,8 @@ $.fn.editor = function (options) {
 		base: "text/html"
 	};
 
+	//read-write
+
 	editor = CodeMirror.fromTextArea(textarea.get(0), {
 		mode: mode,
 		readOnly: options.readOnly,
@@ -55,7 +57,9 @@ $.fn.editor = function (options) {
 	});
 
 	if (options.readOnly) {
-		$(editor.getWrapperElement()).addClass('readonly');
+		$(editor.getWrapperElement()).addClass('cm-read-only');
+	} else {
+		$(editor.getWrapperElement()).addClass('cm-read-write');
 	}
 
 	return editor;

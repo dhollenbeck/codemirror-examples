@@ -71351,7 +71351,7 @@ var ruleSets = {
 	}
 	function getWrap(cm) {
 		var el1 = cm.getWrapperElement();
-		var el2 = $(el1).closest('.fullscreen-wrapper');
+		var el2 = $(el1).closest('.cm-fullscreen-wrapper');
 		return (el2.length)? el2[0] : el1;
 	}
 
@@ -71387,6 +71387,8 @@ $.fn.editor = function (options) {
 		name: "handlebars",
 		base: "text/html"
 	};
+
+	//read-write
 
 	editor = CodeMirror.fromTextArea(textarea.get(0), {
 		mode: mode,
@@ -71431,7 +71433,9 @@ $.fn.editor = function (options) {
 	});
 
 	if (options.readOnly) {
-		$(editor.getWrapperElement()).addClass('readonly');
+		$(editor.getWrapperElement()).addClass('cm-read-only');
+	} else {
+		$(editor.getWrapperElement()).addClass('cm-read-write');
 	}
 
 	return editor;

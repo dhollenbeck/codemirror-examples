@@ -206,7 +206,7 @@
 			min-height: 50px;
 		}
 
-		.codemirror-footer {
+		.cm-footer {
 			background-color: #CCC;
 			color: black;
 		}
@@ -237,8 +237,8 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div id="fullscreen-wrapper" class="fullscreen-wrapper codemirror-flex-container">
-						<div class="codemirror-toolbar codemirror-flex-child-fixed">
+					<div id="cm-fullscreen-wrapper" class="cm-fullscreen-wrapper cm-flex-container">
+						<div class="cm-toolbar cm-flex-child-fixed">
 
 							<!-- start of mega menu -->
 							<div class="navbar navbar-default yamm m-b-0" role="navigation">
@@ -471,14 +471,14 @@
 							</div>
 							<!-- end mega menu -->
 						</div>
-						<div class="codemirror-body codemirror-flex-child-grow">
+						<div class="cm-body cm-flex-child-grow">
 							<textarea class="form-control" name="html" mode="handlebars">
 {{#each foobars extraThing}}
 <h1 class="foobar">{{echo 'hello world'}</h1>
 {{/if}}</textarea>
 						</div>
 
-						<div class="codemirror-footer codemirror-flex-child-fixed">Footer</div>
+						<div class="cm-footer cm-flex-child-fixed">Footer</div>
 					</div>
 				</div>
 			</div>

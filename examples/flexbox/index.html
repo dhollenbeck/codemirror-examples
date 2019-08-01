@@ -39,21 +39,21 @@
 			min-height: 50px;
 		}
 
-		.codemirror-toolbar {
+		.cm-toolbar {
 			border: 1px solid #eee;
 			border-bottom: none;
 			min-height: 26px;
 			padding: 2px;
 			background-color: #999;
 		}
-		.codemirror-footer {
+		.cm-footer {
 			border: 1px solid #eee;
 			border-bottom: none;
 			min-height: 26px;
 			padding: 2px;
 			background-color: #999;
 		}
-		.codemirror-body {
+		.cm-body {
 			background-color: red;
 		}
 
@@ -68,7 +68,7 @@
 
 			$('button#fullscreen').click(function (e) {
 				e.preventDefault();
-				var el = $('#fullscreen-wrapper');
+				var el = $('#cm-fullscreen-wrapper');
 				el.fullscreen('open');
 				// setTimeout(function () {
 				// 	el.fullscreen('close');
@@ -76,7 +76,7 @@
 			});
 			$('button#fullviewport').click(function (e) {
 				e.preventDefault();
-				var el = $('#fullscreen-wrapper');
+				var el = $('#cm-fullscreen-wrapper');
 				el.fullviewport('open');
 				// setTimeout(function () {
 				// 	el.fullviewport('close');
@@ -105,10 +105,10 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div id="fullscreen-wrapper" class="fullscreen-wrapper codemirror-flex-container">
-						<div class="codemirror-toolbar codemirror-flex-child-fixed">Toolbar</div>
+					<div id="cm-fullscreen-wrapper" class="cm-fullscreen-wrapper cm-flex-container">
+						<div class="cm-toolbar cm-flex-child-fixed">Toolbar</div>
 
-						<div class="codemirror-body codemirror-flex-child-grow">
+						<div class="cm-body cm-flex-child-grow">
 							<textarea class="form-control" name="html" mode="handlebars">
 {{#each foobars extraThing}}
 <h1 class="foobar">{{echo 'hello world'}</h1>
@@ -117,7 +117,7 @@
 
 						</div>
 
-						<div class="codemirror-footer codemirror-flex-child-fixed">Footer</div>
+						<div class="cm-footer cm-flex-child-fixed">Footer</div>
 
 					</div>
 				</div>

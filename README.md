@@ -29,28 +29,28 @@ All demos support fullscreen mode. This mode is really full viewport. After you 
 
 For editors with toolbars wrap the editor with div:
 ```html
-<div class="fullscreen-wrapper">
+<div class="cm-fullscreen-wrapper">
 	<!-- start of mega menu -->
 	<!-- textarea here -->
 </div>
 ```
 
 The `<div>` which is expanded to full viewport is determined by:
-- The outer closest div  (`<div class="fullscreen-wrapper">`) to the codemirror div, if not found
+- The outer closest div  (`<div class="cm-fullscreen-wrapper">`) to the codemirror div, if not found
 - The code mirror wrapper instance (`<div class="codemirror">`).
 
 ## Flexbox Layout: Toolbars, Footers, Flexbox and Fullscreen
 
-You can add Bootstrap navbars (toobars) and footers to codemirror. The flexbox layout is:
+You can add Bootstrap navbars (toobars) and footers to codemirror. The HTML flexbox layout is:
 ```hbs
-<div id="fullscreen-wrapper" class="fullscreen-wrapper codemirror-flex-container">
-	<div class="codemirror-toolbar codemirror-flex-child-fixed">
+<div id="cm-fullscreen-wrapper" class="cm-fullscreen-wrapper cm-flex-container">
+	<div class="cm-toolbar cm-flex-child-fixed">
 		{{! your bootstrap navbar}}
 	</div>
-	<div class="codemirror-body codemirror-flex-child-fixed">
+	<div class="cm-body cm-flex-child-grow">
 		{{! your textarea for codemirror}}
 	</div>
-	<div class="codemirror-footer codemirror-flex-child-fixed">
+	<div class="cm-footer cm-flex-child-fixed">
 		{{! your footer navbar}}
 	</div>
 </div>
@@ -58,9 +58,9 @@ You can add Bootstrap navbars (toobars) and footers to codemirror. The flexbox l
 
 The css is shown below and is included in the examples:
 ```css
-.codemirror-flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
-.codemirror-flex-child-fixed {flex: none;}
-.codemirror-flex-child-grow {flex: auto; overflow-y:hidden;}
+.cm-flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
+.cm-flex-child-fixed {flex: none;}
+.cm-flex-child-grow {flex: auto; overflow-y:hidden;}
 ```
 
 Useful resources for flexbox include:
