@@ -15,7 +15,7 @@ Then include the js and css in your web app.
 Auto resize is great for editing of small content. However, it becomes painful for large content. There should be a method to toggle this feature. Auto resize is enabled by default. You can set an explict editor height by:
 
 ```
-var editor = hbs.editor({
+element.editor({
 	height: '300'
 });
 ```
@@ -34,6 +34,16 @@ For editors with toolbars wrap the editor with div:
 	<!-- textarea here -->
 </div>
 ```
+
+We might provide an option to toggle between viewport and screen. The problem with `viewport` is you might have a bootstrap layout with fixed static positioned navbar menu.
+```js
+element.editor({
+	fullscreen: 'viewport' // viewport or screen
+});
+```
+
+
+- https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_fullscreen
 
 # Workflow
 
