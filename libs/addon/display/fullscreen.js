@@ -53,17 +53,17 @@
 	}
 
 	function setNormal(cm) {
-		var wrap = getWrap(cm);
+		var elWrap = getWrap(cm);
 
 		// restore <html> tag
 		document.documentElement.style.overflow = '';
 
 		// remove wrapper class
-		wrap.className = wrap.className.replace(/\s*CodeMirror-fullscreen\b/, '');
+		elWrap.className = elWrap.className.replace(/\s*CodeMirror-fullscreen\b/, '');
 
 		// restore wrapper state
-		wrap.style.width = cm.state.fullScreenRestoreWrapper.width;
-		wrap.style.height = cm.state.fullScreenRestoreWrapper.height;
+		elWrap.style.width = cm.state.fullScreenRestoreWrapper.width;
+		elWrap.style.height = cm.state.fullScreenRestoreWrapper.height;
 
 		// restore window state
 		window.scrollTo(
