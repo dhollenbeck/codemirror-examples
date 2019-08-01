@@ -68,7 +68,7 @@
 
 			$('button#fullscreen').click(function (e) {
 				e.preventDefault();
-				var el = $('#cm-fullscreen-wrapper');
+				var el = $('#cm-fullscreen-container');
 				el.fullscreen('open');
 				// setTimeout(function () {
 				// 	el.fullscreen('close');
@@ -76,7 +76,7 @@
 			});
 			$('button#fullviewport').click(function (e) {
 				e.preventDefault();
-				var el = $('#cm-fullscreen-wrapper');
+				var el = $('#cm-fullscreen-container');
 				el.fullviewport('open');
 				// setTimeout(function () {
 				// 	el.fullviewport('close');
@@ -105,7 +105,7 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div id="cm-fullscreen-wrapper" class="cm-fullscreen-wrapper cm-flex-container">
+					<div id="cm-fullscreen-container" class="cm-fullscreen-container cm-flex-container">
 						<div class="cm-toolbar cm-flex-child-fixed">Toolbar</div>
 
 						<div class="cm-body cm-flex-child-grow">

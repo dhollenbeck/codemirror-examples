@@ -71351,7 +71351,7 @@ var ruleSets = {
 	}
 	function getWrap(cm) {
 		var el1 = cm.getWrapperElement();
-		var el2 = $(el1).closest('.cm-fullscreen-wrapper');
+		var el2 = $(el1).closest('.cm-fullscreen-container');
 		return (el2.length)? el2[0] : el1;
 	}
 

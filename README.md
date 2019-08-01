@@ -29,21 +29,21 @@ All demos support fullscreen mode. This mode is really full viewport. After you 
 
 For editors with toolbars wrap the editor with div:
 ```html
-<div class="cm-fullscreen-wrapper">
+<div class="cm-fullscreen-container">
 	<!-- start of mega menu -->
 	<!-- textarea here -->
 </div>
 ```
 
 The `<div>` which is expanded to full viewport is determined by:
-- The outer closest div  (`<div class="cm-fullscreen-wrapper">`) to the codemirror div, if not found
+- The outer closest div  (`<div class="cm-fullscreen-container">`) to the codemirror div, if not found
 - The code mirror wrapper instance (`<div class="codemirror">`).
 
 ## Flexbox Layout: Toolbars, Footers, Flexbox and Fullscreen
 
 You can add Bootstrap navbars (toobars) and footers to codemirror. The HTML flexbox layout is:
 ```hbs
-<div id="cm-fullscreen-wrapper" class="cm-fullscreen-wrapper cm-flex-container">
+<div class="cm-fullscreen-container cm-flex-container">
 	<div class="cm-toolbar cm-flex-child-fixed">
 		{{! your bootstrap navbar}}
 	</div>
