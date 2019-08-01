@@ -68,6 +68,10 @@ Useful resources for flexbox include:
 - https://css-tricks.com/snippets/css/complete-guide-grid/
 - http://flexboxgrid.com/
 
+## Auto-Sizing Limit
+
+There should be option to limit the size of the editor in auto-scrolling.
+
 ## Todo: Code Folding
 - https://codemirror.net/demo/folding.html
 

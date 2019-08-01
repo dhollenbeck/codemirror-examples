@@ -43,7 +43,19 @@ $.fn.editor = function (options) {
 	// <div class="CodeMirror cm-s-default CodeMirror-wrap" style="height: auto;">
 	// See: https://codemirror.net/demo/resize.html
 	options.height = options.height || 'auto';
+	options.linesLock = options.linesLock || 25;
 	editor.setSize(null, options.height);
+	var heightLocked = false;
+	editor.on('change', function (cm) {
+		var lines = cm.doc.size;
+		var el, height;
+		if (!heightLocked && lines > options.linesLock) {
+			heightLocked = true;
+			el = cm.getWrapperElement();
+			height = $(el).height();
+			cm.setSize(null, height + 5);
+		}
+	});
 
 	editor.on('change', function (editor) {
 		// perhaps throttle editor.save()
