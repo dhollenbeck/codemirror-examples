@@ -14,9 +14,9 @@ Then include the js and css in your web app.
 ## Auto Resize
 Auto resize is great for editing of small content. However, it becomes painful for large content. There should be a method to toggle this feature. Auto resize is enabled by default. You can set an explict editor height by:
 
-```
+```js
 element.editor({
-	height: '300'
+	height: '300px' // auto, or pixels
 });
 ```
 
@@ -34,37 +34,66 @@ For editors with toolbars wrap the editor with div:
 	<!-- textarea here -->
 </div>
 ```
+
+The `<div>` which is expanded to full viewport is determined by:
+- The outer closest div  (`<div class="fullscreen-wrapper">`) to the codemirror div, if not found
+- The code mirror wrapper instance (`<div class="codemirror">`).
+
+## Flexbox Layout: Toolbars, Footers, Flexbox and Fullscreen
+
+You can add Bootstrap navbars (toobars) and footers to codemirror. The flexbox layout is:
+```hbs
+<div id="fullscreen-wrapper" class="fullscreen-wrapper codemirror-flex-container">
+	<div class="codemirror-toolbar codemirror-flex-child-fixed">
+		{{! your bootstrap navbar}}
+	</div>
+	<div class="codemirror-body codemirror-flex-child-fixed">
+		{{! your textarea for codemirror}}
+	</div>
+	<div class="codemirror-footer codemirror-flex-child-fixed">
+		{{! your footer navbar}}
+	</div>
+</div>
+```
+
+The css is shown below and is included in the examples:
+```css
+.codemirror-flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
+.codemirror-flex-child-fixed {flex: none;}
+.codemirror-flex-child-grow {flex: auto; overflow-y:hidden;}
+```
+
+Useful resources for flexbox include:
+- https://css-tricks.com/snippets/css/a-guide-to-flexbox/
+- https://css-tricks.com/snippets/css/complete-guide-grid/
+- http://flexboxgrid.com/
+
+## Todo: Code Folding
+- https://codemirror.net/demo/folding.html
+
+## Todo: Drag Resizing
+- https://github.com/codemirror/CodeMirror/issues/850
+- https://interactjs.io/
+
+## Todo: Improve fullscreen
+- **Support window scroll on exit:** Be the user presses the fullscreen mode the browser window might be scrolled. This scrolled state should be restore upon existing fullscreen.
+- **Support codemirror scroll on enter:** Before the user presses fullscreen mode the editor might be too large for fullscreen. In this case the editor will scroll. The cursor can be below the fold.
+
+## Todo: Better working example of footer.
+- Show percent changed.
+- Show `insert` mode state.
+- Show line and col indicator (Ln 85, Col 42).
+- Show editor mode (HBS, HTML, CSS, Javascript).
+- Show linter status.
+- Show provejs validation errors.
+- Show template identifier.
+
+## Todo: Workings of Monaco Editor For Comparison
+- https://microsoft.github.io/monaco-editor/
+
+
 # Workflow
 
 ```bash
 grunt build
 ```
-
-# todo
-
-## Full Screen Option
-We might provide an option to toggle between viewport and screen. The problem with `viewport` is you might have a bootstrap layout with fixed static positioned navbar menu.
-```js
-element.editor({
-	fullscreen: 'viewport' // viewport or screen
-});
-```
-
-- https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_fullscreen
-
-## Code Folding
-- https://codemirror.net/demo/folding.html
-
-## Flexbox Layout
-- https://css-tricks.com/snippets/css/a-guide-to-flexbox/
-- https://css-tricks.com/snippets/css/complete-guide-grid/
-- http://flexboxgrid.com/
-
-## Workings of Monaco Editor For Comparison
-
-- https://microsoft.github.io/monaco-editor/
-
-
-## Drag Resizing
-- https://github.com/codemirror/CodeMirror/issues/850
-- https://interactjs.io/
