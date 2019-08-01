@@ -1,1 +1,5 @@
-.CodeMirror-lines {min-height: 50px;}
+.codemirror-lines {min-height: 50px;}
+
+.codemirror-flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
+.codemirror-flex-child-fixed {flex: none;}
+.codemirror-flex-child-grow {flex: auto; overflow-y:hidden;}

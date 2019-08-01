@@ -206,12 +206,9 @@
 			min-height: 50px;
 		}
 
-		.CodeMirrorToobar {
-			border: 1px solid #eee;
-			border-bottom: none;
-			min-height: 26px;
-			padding: 2px;
-			background-color: #f7f7f7;
+		.codemirror-footer {
+			background-color: #CCC;
+			color: black;
 		}
 
 		.navbar {
@@ -240,168 +237,125 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div class="fullscreen-wrapper">
+					<div id="fullscreen-wrapper" class="fullscreen-wrapper codemirror-flex-container">
+						<div class="codemirror-toolbar codemirror-flex-child-fixed">
 
-						<!-- start of mega menu -->
-						<div class="navbar navbar-default yamm m-b-0" role="navigation">
-							<div class="container-fluid">
-								<div class="navbar-header">
-									<button type="button" class="navbar-toggle" data-toggle="collapse"
-										data-target=".navbar-collapse">
-										<span class="icon-bar"></span>
-										<span class="icon-bar"></span>
-										<span class="icon-bar"></span>
-									</button>
-									<span class="navbar-brand active" href="/"></a><span class="label label-default"><i
-												class="fa fa-home"></i> <em>Editor</em></span></span>
-								</div>
-								<div class="collapse navbar-collapse">
+							<!-- start of mega menu -->
+							<div class="navbar navbar-default yamm m-b-0" role="navigation">
+								<div class="container-fluid">
+									<div class="navbar-header">
+										<button type="button" class="navbar-toggle" data-toggle="collapse"
+											data-target=".navbar-collapse">
+											<span class="icon-bar"></span>
+											<span class="icon-bar"></span>
+											<span class="icon-bar"></span>
+										</button>
+										<span class="navbar-brand active" href="/"></a><span class="label label-default"><i
+													class="fa fa-home"></i> <em>Editor</em></span></span>
+									</div>
+									<div class="collapse navbar-collapse">
 
-									<ul class="nav navbar-nav hidden-xs">
+										<ul class="nav navbar-nav hidden-xs">
 
-										<!-- helpers dropdown -->
-										<li class="dropdown yamm-fw">
-											<a href="#" class="dropdown-toggle" data-toggle="dropdown">Helpers <span
-													class="caret"></span></a>
-											<ul class="dropdown-menu p-t-0 p-b-0">
-												<li>
-													<div class="m-l-20 m-r-20">
-														<div class="row">
-															<div id="helper-list" class="col-sm-2 p-10">
-																<div class="radio">
-																	<label>
-																		<input type="radio" name="helper" value="helper1"
-																			checked>
-																		Helper One
-																	</label>
+											<!-- helpers dropdown -->
+											<li class="dropdown yamm-fw">
+												<a href="#" class="dropdown-toggle" data-toggle="dropdown">Helpers <span
+														class="caret"></span></a>
+												<ul class="dropdown-menu p-t-0 p-b-0">
+													<li>
+														<div class="m-l-20 m-r-20">
+															<div class="row">
+																<div id="helper-list" class="col-sm-2 p-10">
+																	<div class="radio">
+																		<label>
+																			<input type="radio" name="helper" value="helper1"
+																				checked>
+																			Helper One
+																		</label>
+																	</div>
+																	<div class="radio">
+																		<label>
+																			<input type="radio" name="helper" value="helper2">
+																			Helper Two
+																		</label>
+																	</div>
+																	<div class="radio">
+																		<label>
+																			<input type="radio" name="helper" value="helper3">
+																			Helper Three
+																		</label>
+																	</div>
 																</div>
-																<div class="radio">
-																	<label>
-																		<input type="radio" name="helper" value="helper2">
-																		Helper Two
-																	</label>
-																</div>
-																<div class="radio">
-																	<label>
-																		<input type="radio" name="helper" value="helper3">
-																		Helper Three
-																	</label>
-																</div>
-															</div>
 
-															<div class="col-sm-10 p-10">
-																<div id="helper1" class="helper-info">
-																	<div class="page-header m-t-5 m-b-10 p-b-2">
-																		<h4>Helper One <small>Does Something Useful</small>
-																		</h4>
-																	</div>
-																	<pre>&lbrace;&lbrace;helper1 f123 &rbrace;&rbrace; </pre>
-																	<p>Lorem ipsum dolor sit amet, consectetur adipiscing
-																		elit. Nulla elementum rutrum posuere. Duis ac sem
-																		pharetra, imperdiet neque eu, imperdiet ligula.
-																		Donec velit erat, ultrices sed libero a, laoreet
-																		egestas justo. Vivamus sed orci in sem aliquet
-																		finibus. Duis ac ex bibendum, pretium elit nec,
-																		efficitur justo. Phasellus eleifend, orci at
-																		hendrerit mollis, sem urna accumsan libero, eu
-																		placerat massa nisl ac turpis. Donec pharetra leo
-																		mi, non dictum sem pulvinar ac.</p>
-																	<div class="pull-right">
-																		<a class="btn btn-primary btn-small"
-																			data-insert="[[helper1 f123]] "
-																			href="#">Insert</a>
-																		<a class="btn btn-default btn-small"
-																			href="#">More</a>
-																	</div>
-																</div>
-																<div id="helper2" class="helper-info" style="display:none;">
-																	<div class="page-header m-t-5 m-b-10 p-b-2">
-																		<h4>Helper Two <small>Does Something Useful</small>
-																		</h4>
-																	</div>
-																	<pre>&lbrace;&lbrace;helper2 f123 &rbrace;&rbrace; </pre>
-																	<p>Lorem ipsum dolor sit amet, consectetur adipiscing
-																		elit. Nulla elementum rutrum posuere. Duis ac sem
-																		pharetra, imperdiet neque eu, imperdiet ligula.
-																		Donec velit erat, ultrices sed libero a, laoreet
-																		egestas justo. Vivamus sed orci in sem aliquet
-																		finibus. Duis ac ex bibendum, pretium elit nec,
-																		efficitur justo. Phasellus eleifend, orci at
-																		hendrerit mollis, sem urna accumsan libero, eu
-																		placerat massa nisl ac turpis. Donec pharetra leo
-																		mi, non dictum sem pulvinar ac.</p>
-																	<div class="pull-right">
-																		<a class="btn btn-primary btn-small"
-																			data-insert="[[helper2 f123]] "
-																			href="#">Insert</a>
-																		<a class="btn btn-default btn-small"
-																			href="#">More</a>
-																	</div>
-																</div>
-																<div id="helper3" class="helper-info" style="display:none;">
-																	<div class="page-header m-t-5 m-b-10 p-b-2">
-																		<h4>Helper Three <small>Does Something
-																				Useful</small></h4>
-																	</div>
-																	<pre>&lbrace;&lbrace;helper3 f123 &rbrace;&rbrace; </pre>
-																	<p>Lorem ipsum dolor sit amet, consectetur adipiscing
-																		elit. Nulla elementum rutrum posuere. Duis ac sem
-																		pharetra, imperdiet neque eu, imperdiet ligula.
-																		Donec velit erat, ultrices sed libero a, laoreet
-																		egestas justo. Vivamus sed orci in sem aliquet
-																		finibus. Duis ac ex bibendum, pretium elit nec,
-																		efficitur justo. Phasellus eleifend, orci at
-																		hendrerit mollis, sem urna accumsan libero, eu
-																		placerat massa nisl ac turpis. Donec pharetra leo
-																		mi, non dictum sem pulvinar ac.</p>
-																	<div class="pull-right">
-																		<a class="btn btn-primary btn-small"
-																			data-insert="[[helper3 f123]] "
-																			href="#">Insert</a>
-																		<a class="btn btn-default btn-small"
-																			href="#">More</a>
-																	</div>
-																</div>
-															</div>
-														</div>
-													</div>
-												</li>
-											</ul>
-										</li>
-										<!-- /helpers dropdown -->
-										<!-- fields dropdown -->
-										<li class="dropdown yamm-fw fields">
-											<a href="#" class="dropdown-toggle" data-toggle="dropdown">Fields <span
-													class="caret"></span></a>
-											<ul class="dropdown-menu p-t-0 p-b-0">
-												<li>
-													<div class="m-l-20 m-r-20">
-														<div class="row">
-															<div class="col-sm-12 er-description p-10">
-																<div id="fields" class="" style="min-height:100px;">
-																	<div class="page-header m-t-5 m-b-10 p-b-2">
-																		<h4>Fields <small>Search For a Merge Field</small>
-																		</h4>
-																	</div>
-																	<input type="text" class="form-control typeahead"
-																		placeholder="Enter keyword here">
-
-																	<div id="field-info" style="display:none;">
-																		<p id="field-info" class="m-t-10">Lorem ipsum dolor
-																			sit amet, consectetur adipiscing elit. Nulla
-																			elementum rutrum posuere. Duis ac sem pharetra,
-																			imperdiet neque eu, imperdiet ligula. Donec
-																			velit erat, ultrices sed libero a, laoreet
+																<div class="col-sm-10 p-10">
+																	<div id="helper1" class="helper-info">
+																		<div class="page-header m-t-5 m-b-10 p-b-2">
+																			<h4>Helper One <small>Does Something Useful</small>
+																			</h4>
+																		</div>
+																		<pre>&lbrace;&lbrace;helper1 f123 &rbrace;&rbrace; </pre>
+																		<p>Lorem ipsum dolor sit amet, consectetur adipiscing
+																			elit. Nulla elementum rutrum posuere. Duis ac sem
+																			pharetra, imperdiet neque eu, imperdiet ligula.
+																			Donec velit erat, ultrices sed libero a, laoreet
 																			egestas justo. Vivamus sed orci in sem aliquet
 																			finibus. Duis ac ex bibendum, pretium elit nec,
 																			efficitur justo. Phasellus eleifend, orci at
 																			hendrerit mollis, sem urna accumsan libero, eu
-																			placerat massa nisl ac turpis. Donec pharetra
-																			leo mi, non dictum sem pulvinar ac.</p>
+																			placerat massa nisl ac turpis. Donec pharetra leo
+																			mi, non dictum sem pulvinar ac.</p>
 																		<div class="pull-right">
-																			<a id="field-insert"
-																				class="btn btn-primary btn-small"
-																				data-insert="" href="#">Insert</a>
+																			<a class="btn btn-primary btn-small"
+																				data-insert="[[helper1 f123]] "
+																				href="#">Insert</a>
+																			<a class="btn btn-default btn-small"
+																				href="#">More</a>
+																		</div>
+																	</div>
+																	<div id="helper2" class="helper-info" style="display:none;">
+																		<div class="page-header m-t-5 m-b-10 p-b-2">
+																			<h4>Helper Two <small>Does Something Useful</small>
+																			</h4>
+																		</div>
+																		<pre>&lbrace;&lbrace;helper2 f123 &rbrace;&rbrace; </pre>
+																		<p>Lorem ipsum dolor sit amet, consectetur adipiscing
+																			elit. Nulla elementum rutrum posuere. Duis ac sem
+																			pharetra, imperdiet neque eu, imperdiet ligula.
+																			Donec velit erat, ultrices sed libero a, laoreet
+																			egestas justo. Vivamus sed orci in sem aliquet
+																			finibus. Duis ac ex bibendum, pretium elit nec,
+																			efficitur justo. Phasellus eleifend, orci at
+																			hendrerit mollis, sem urna accumsan libero, eu
+																			placerat massa nisl ac turpis. Donec pharetra leo
+																			mi, non dictum sem pulvinar ac.</p>
+																		<div class="pull-right">
+																			<a class="btn btn-primary btn-small"
+																				data-insert="[[helper2 f123]] "
+																				href="#">Insert</a>
+																			<a class="btn btn-default btn-small"
+																				href="#">More</a>
+																		</div>
+																	</div>
+																	<div id="helper3" class="helper-info" style="display:none;">
+																		<div class="page-header m-t-5 m-b-10 p-b-2">
+																			<h4>Helper Three <small>Does Something
+																					Useful</small></h4>
+																		</div>
+																		<pre>&lbrace;&lbrace;helper3 f123 &rbrace;&rbrace; </pre>
+																		<p>Lorem ipsum dolor sit amet, consectetur adipiscing
+																			elit. Nulla elementum rutrum posuere. Duis ac sem
+																			pharetra, imperdiet neque eu, imperdiet ligula.
+																			Donec velit erat, ultrices sed libero a, laoreet
+																			egestas justo. Vivamus sed orci in sem aliquet
+																			finibus. Duis ac ex bibendum, pretium elit nec,
+																			efficitur justo. Phasellus eleifend, orci at
+																			hendrerit mollis, sem urna accumsan libero, eu
+																			placerat massa nisl ac turpis. Donec pharetra leo
+																			mi, non dictum sem pulvinar ac.</p>
+																		<div class="pull-right">
+																			<a class="btn btn-primary btn-small"
+																				data-insert="[[helper3 f123]] "
+																				href="#">Insert</a>
 																			<a class="btn btn-default btn-small"
 																				href="#">More</a>
 																		</div>
@@ -409,75 +363,122 @@
 																</div>
 															</div>
 														</div>
-													</div>
-												</li>
-											</ul>
-										</li>
-										<!-- /fields dropdown -->
-										<!-- html dropdown -->
-										<li class="dropdown">
-											<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
-												aria-haspopup="true" aria-expanded="false">
-												<i class="fa fa-user hidden-xs"></i> HTML <span class="caret"></span>
-											</a>
-											<ul class="dropdown-menu" id="html">
-												<li class="dropdown-header">Tags</li>
-												<li><a href="#"
-														data-cmd="&lt;h1&gt;your header&lt;/h1&gt;\n"><strong>&lt;h1&gt;...&lt;/h1&gt;</strong>
-														- large header.</a></li>
-												<li><a href="#"
-														data-cmd="&lt;h2&gt;your header&lt;/h2&gt;\n"><strong>&lt;h2&gt;...&lt;/h2&gt;</strong>
-														- medimum header.</a></li>
-												<li><a href="#"
-														data-cmd="&lt;p&gt;your text&lt;/p&gt;\n"><strong>&lt;p&gt;...&lt;/p&gt;</strong>
-														- paragraph of text.</a></li>
-												<li><a href="#"
-														data-cmd="&lt;b&gt;your text&lt;/b&gt;\n"><strong>&lt;b&gt;...&lt;/b&gt;</strong>
-														- bold text.</a></li>
-											</ul>
-										</li>
-										<!-- /html dropdown -->
-									</ul>
-									<ul class="nav navbar-nav navbar-right">
-										<li class="dropdown">
-											<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
-												aria-haspopup="true" aria-expanded="false">
-												<i class="fa fa-user hidden-xs"></i> Commands <span class="caret"></span>
-											</a>
-											<ul class="dropdown-menu dropdown-menu-right" id="commands">
-												<li><a href="#selectAll" data-cmd="selectAll"><strong>Select All</strong> -
-														Ctrl-A</a></li>
-												<li><a href="#deleteLine" data-cmd="deleteLine"><strong>Delete Line</strong>
-														- Ctrl-D</a></li>
-												<li><a href="#updo" data-cmd="undo"><strong>Undo</strong> - Ctrl-Z</a></li>
-												<li><a href="#redo" data-cmd="redo"><strong>Redo</strong> - Ctrl-Y</a></li>
-												<li role="separator" class="divider"></li>
-												<li><a href="#find" data-cmd="find"><strong>Find</strong> - Ctrl-F</a></li>
-												<li><a href="#findNext" data-cmd="findNext"><strong>Find Next</strong> -
-														Ctrl-G</a></li>
-												<li><a href="#findPrev" data-cmd="findPrev"><strong>Find Prev</strong> -
-														Shift-Ctrl-G</a></li>
-												<li><a href="#replace" data-cmd="replace"><strong>Replace</strong> -
-														Shift-Ctrl-F</a></li>
-												<li><a href="#replaceAll" data-cmd="replaceAll"><strong>Replace All</strong>
-														- Shift-Ctrl-R</a></li>
-												<li role="separator" class="divider"></li>
-												<li><a target="_blank"
-														href="https://codemirror.net/doc/manual.html#commands">More ...</a>
-												</li>
-											</ul>
-										</li>
-									</ul>
+													</li>
+												</ul>
+											</li>
+											<!-- /helpers dropdown -->
+											<!-- fields dropdown -->
+											<li class="dropdown yamm-fw fields">
+												<a href="#" class="dropdown-toggle" data-toggle="dropdown">Fields <span
+														class="caret"></span></a>
+												<ul class="dropdown-menu p-t-0 p-b-0">
+													<li>
+														<div class="m-l-20 m-r-20">
+															<div class="row">
+																<div class="col-sm-12 er-description p-10">
+																	<div id="fields" class="" style="min-height:100px;">
+																		<div class="page-header m-t-5 m-b-10 p-b-2">
+																			<h4>Fields <small>Search For a Merge Field</small>
+																			</h4>
+																		</div>
+																		<input type="text" class="form-control typeahead"
+																			placeholder="Enter keyword here">
+
+																		<div id="field-info" style="display:none;">
+																			<p id="field-info" class="m-t-10">Lorem ipsum dolor
+																				sit amet, consectetur adipiscing elit. Nulla
+																				elementum rutrum posuere. Duis ac sem pharetra,
+																				imperdiet neque eu, imperdiet ligula. Donec
+																				velit erat, ultrices sed libero a, laoreet
+																				egestas justo. Vivamus sed orci in sem aliquet
+																				finibus. Duis ac ex bibendum, pretium elit nec,
+																				efficitur justo. Phasellus eleifend, orci at
+																				hendrerit mollis, sem urna accumsan libero, eu
+																				placerat massa nisl ac turpis. Donec pharetra
+																				leo mi, non dictum sem pulvinar ac.</p>
+																			<div class="pull-right">
+																				<a id="field-insert"
+																					class="btn btn-primary btn-small"
+																					data-insert="" href="#">Insert</a>
+																				<a class="btn btn-default btn-small"
+																					href="#">More</a>
+																			</div>
+																		</div>
+																	</div>
+																</div>
+															</div>
+														</div>
+													</li>
+												</ul>
+											</li>
+											<!-- /fields dropdown -->
+											<!-- html dropdown -->
+											<li class="dropdown">
+												<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+													aria-haspopup="true" aria-expanded="false">
+													<i class="fa fa-user hidden-xs"></i> HTML <span class="caret"></span>
+												</a>
+												<ul class="dropdown-menu" id="html">
+													<li class="dropdown-header">Tags</li>
+													<li><a href="#"
+															data-cmd="&lt;h1&gt;your header&lt;/h1&gt;\n"><strong>&lt;h1&gt;...&lt;/h1&gt;</strong>
+															- large header.</a></li>
+													<li><a href="#"
+															data-cmd="&lt;h2&gt;your header&lt;/h2&gt;\n"><strong>&lt;h2&gt;...&lt;/h2&gt;</strong>
+															- medimum header.</a></li>
+													<li><a href="#"
+															data-cmd="&lt;p&gt;your text&lt;/p&gt;\n"><strong>&lt;p&gt;...&lt;/p&gt;</strong>
+															- paragraph of text.</a></li>
+													<li><a href="#"
+															data-cmd="&lt;b&gt;your text&lt;/b&gt;\n"><strong>&lt;b&gt;...&lt;/b&gt;</strong>
+															- bold text.</a></li>
+												</ul>
+											</li>
+											<!-- /html dropdown -->
+										</ul>
+										<ul class="nav navbar-nav navbar-right">
+											<li class="dropdown">
+												<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+													aria-haspopup="true" aria-expanded="false">
+													<i class="fa fa-user hidden-xs"></i> Commands <span class="caret"></span>
+												</a>
+												<ul class="dropdown-menu dropdown-menu-right" id="commands">
+													<li><a href="#selectAll" data-cmd="selectAll"><strong>Select All</strong> -
+															Ctrl-A</a></li>
+													<li><a href="#deleteLine" data-cmd="deleteLine"><strong>Delete Line</strong>
+															- Ctrl-D</a></li>
+													<li><a href="#updo" data-cmd="undo"><strong>Undo</strong> - Ctrl-Z</a></li>
+													<li><a href="#redo" data-cmd="redo"><strong>Redo</strong> - Ctrl-Y</a></li>
+													<li role="separator" class="divider"></li>
+													<li><a href="#find" data-cmd="find"><strong>Find</strong> - Ctrl-F</a></li>
+													<li><a href="#findNext" data-cmd="findNext"><strong>Find Next</strong> -
+															Ctrl-G</a></li>
+													<li><a href="#findPrev" data-cmd="findPrev"><strong>Find Prev</strong> -
+															Shift-Ctrl-G</a></li>
+													<li><a href="#replace" data-cmd="replace"><strong>Replace</strong> -
+															Shift-Ctrl-F</a></li>
+													<li><a href="#replaceAll" data-cmd="replaceAll"><strong>Replace All</strong>
+															- Shift-Ctrl-R</a></li>
+													<li role="separator" class="divider"></li>
+													<li><a target="_blank"
+															href="https://codemirror.net/doc/manual.html#commands">More ...</a>
+													</li>
+												</ul>
+											</li>
+										</ul>
+									</div>
 								</div>
 							</div>
+							<!-- end mega menu -->
 						</div>
-						<!-- end mega menu -->
+						<div class="codemirror-body codemirror-flex-child-grow">
+							<textarea class="form-control" name="html" mode="handlebars">
+{{#each foobars extraThing}}
+<h1 class="foobar">{{echo 'hello world'}</h1>
+{{/if}}</textarea>
+						</div>
 
-						<textarea class="form-control" name="html" mode="handlebars">
-	{{#each foobars extraThing}}
-	<h1 class="foobar">{{echo 'hello world'}</h1>
-	{{/if}}
-						</textarea>
+						<div class="codemirror-footer codemirror-flex-child-fixed">Footer</div>
 					</div>
 				</div>
 			</div>
