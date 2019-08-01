@@ -7,7 +7,7 @@ $.fn.editor = function (options) {
 	textarea = $(this);
 	mode = options.mode || textarea.attr('mode') || 'html';
 	if (mode === 'html') mode = 'text/html';
-	if (mode === 'handlebars') mode = {
+	if (mode === 'handlebars' || mode === 'hbs') mode = {
 		name: "handlebars",
 		base: "text/html"
 	};
