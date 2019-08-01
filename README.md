@@ -34,7 +34,15 @@ For editors with toolbars wrap the editor with div:
 	<!-- textarea here -->
 </div>
 ```
+# Workflow
 
+```bash
+grunt build
+```
+
+# todo
+
+## Full Screen Option
 We might provide an option to toggle between viewport and screen. The problem with `viewport` is you might have a bootstrap layout with fixed static positioned navbar menu.
 ```js
 element.editor({
@@ -42,11 +50,18 @@ element.editor({
 });
 ```
 
-
 - https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_fullscreen
 
-# Workflow
+## Code Folding
+- https://codemirror.net/demo/folding.html
 
-```bash
-grunt build
-```
+## Flexbox Layout
+- https://css-tricks.com/snippets/css/a-guide-to-flexbox/
+- https://css-tricks.com/snippets/css/complete-guide-grid/
+- http://flexboxgrid.com/
+
+## Workings of Monaco Editor For Comparison
+
+- https://microsoft.github.io/monaco-editor/
+
+
