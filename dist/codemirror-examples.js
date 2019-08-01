@@ -71354,62 +71354,22 @@ var ruleSets = {
 		var el2 = $(el1).closest('.fullscreen-wrapper');
 		return (el2.length)? el2[0] : el1;
 	}
-	function getHtml() {
-		return document.documentElement;
-	}
 
 	function setFullscreen(cm) {
-		var elHtml = getHtml(cm);
 		var elWrap = getWrap(cm);
 		var elEdit = getEdit(cm);
 
-		// save states
-		cm.state.fullScreenRestoreWrapper = {
-			width: elWrap.style.width,
-			height: elWrap.style.height
-		};
-		cm.state.fullScreenRestoreEditor = {
-			height: elEdit.style.height
-		};
-		cm.state.fullScreenRestoreWindow = {
-			scrollTop: window.pageYOffset,
-			scrollLeft: window.pageXOffset
-		};
-
-		// set <wrap>
-		elWrap.style.width = '';
-		elWrap.style.height = '100vh';
-		elWrap.className += ' CodeMirror-fullscreen';
-
-		// set <html>
-		elHtml.style.overflow = 'hidden';
-
-		// set <edit>
+		cm.state.fullScreenRestoreEditor = {height: elEdit.style.height};
+		$(elWrap).fullviewport('open');
 		elEdit.style.height = '100%';
-
 		cm.refresh();
 	}
 
 	function setNormal(cm) {
 		var elWrap = getWrap(cm);
-		var elHtml = getHtml(cm);
 		var elEdit = getEdit(cm);
-
-		// restore <html>
-		elHtml.style.overflow = '';
-
-		// restore <wrap>
-		elWrap.className = elWrap.className.replace(/\s*CodeMirror-fullscreen\b/, '');
-		elWrap.style.width = cm.state.fullScreenRestoreWrapper.width;
-		elWrap.style.height = cm.state.fullScreenRestoreWrapper.height;
-
-		// restore <edit>
+		$(elWrap).fullviewport('close');
 		elEdit.style.height = cm.state.fullScreenRestoreEditor.height;
-
-		// restore window state
-		window.scrollTo(
-			cm.state.fullScreenRestoreWindow.scrollLeft,
-			cm.state.fullScreenRestoreWindow.scrollTop);
 		cm.refresh();
 	}
 });
@@ -71475,4 +71435,98 @@ $.fn.editor = function (options) {
 	}
 
 	return editor;
+};
+
+$.fn.fullscreen = function(dir) {
+
+	var el = this;
+	dir = dir || 'open';
+
+	if (dir === 'open') {
+		open(el);
+	} else if (dir === 'close') {
+		close();
+	} else {
+		throw new Error('Unknown dir in fullscreen plugin.');
+	}
+
+	function close() {
+		if (document.exitFullscreen) {
+			document.exitFullscreen();
+		  } else if (document.mozCancelFullScreen) { /* Firefox */
+			document.mozCancelFullScreen();
+		  } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+			document.webkitExitFullscreen();
+		  } else if (document.msExitFullscreen) { /* IE/Edge */
+			document.msExitFullscreen();
+		  }
+	}
+
+	// go full screen
+	function open(el) {
+		if (el && el instanceof jQuery) el = el[0];
+		if (el.requestFullscreen) {
+			el.requestFullscreen();
+		} else if (el.mozRequestFullScreen) { /* Firefox */
+			el.mozRequestFullScreen();
+		} else if (el.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+			el.webkitRequestFullscreen();
+		} else if (el.msRequestFullscreen) { /* IE/Edge */
+			el.msRequestFullscreen();
+		} else {
+			console.log('Warning: fullscreen is not supported.');
+		}
+	}
+};
+$.fn.fullviewport = function(dir) {
+
+	var el = this;
+	var html = $('html');
+
+	dir = dir || 'open';
+	if (dir === 'open') {
+		open(el);
+	} else if (dir === 'close') {
+		close(el);
+	} else {
+		throw new Error('Unknown dir in fullviewport plugin.');
+	}
+
+	function close(wrap) {
+		html.css({overflow: ''});
+		wrap.styleRestore();
+	}
+
+	// go full viewport
+	function open(wrap) {
+		wrap.styleSave();
+
+		// set <wrap>
+		wrap.css({
+			width: '',
+			height: '100vh',
+			position: 'fixed',
+			top: 0,
+			left: 0,
+			right: 0,
+			bottom: 0,
+			'z-index': 10000
+		});
+
+		// set <html>
+		html.css({overflow: 'hidden'});
+	}
+};
+$.fn.styleSave = function () {
+	this.each(function () {
+		var el = $(this);
+		el.attr('style-cache', el.attr('style'));
+	});
+};
+$.fn.styleRestore = function () {
+	this.each(function () {
+		var el = $(this);
+		el.attr('style', el.attr('style-cache') || '');
+		el.attr('style-cache', '');
+	});
 };
