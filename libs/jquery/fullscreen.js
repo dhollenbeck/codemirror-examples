@@ -14,13 +14,15 @@ $.fn.fullscreen = function(dir) {
 	function close() {
 		if (document.exitFullscreen) {
 			document.exitFullscreen();
-		  } else if (document.mozCancelFullScreen) { /* Firefox */
+		} else if (document.mozCancelFullScreen) { /* Firefox */
 			document.mozCancelFullScreen();
-		  } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+		} else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
 			document.webkitExitFullscreen();
-		  } else if (document.msExitFullscreen) { /* IE/Edge */
+		} else if (document.msExitFullscreen) { /* IE/Edge */
 			document.msExitFullscreen();
-		  }
+		} else {
+			console.log('Warning: fullscreen close is not supported.');
+		}
 	}
 
 	// go full screen
@@ -35,7 +37,7 @@ $.fn.fullscreen = function(dir) {
 		} else if (el.msRequestFullscreen) { /* IE/Edge */
 			el.msRequestFullscreen();
 		} else {
-			console.log('Warning: fullscreen is not supported.');
+			console.log('Warning: fullscreen open is not supported.');
 		}
 	}
 };

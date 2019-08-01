@@ -55,7 +55,8 @@ module.exports = function (grunt) {
 				'libs/addon/lint/handlebars-lint.js',
 				'libs/addon/display/fullscreen.js',
 				'libs/jquery/editor.js',
-				'libs/jquery/fullscreen.js'
+				'libs/jquery/fullscreen.js',
+				'libs/jquery/autosize.js'
 			]
 		},
 		css: {

@@ -59,16 +59,24 @@
 	</style>
 	<script>
 		$(function () {
+			var hbs = $('textarea[mode="handlebars"]');
+
+			var editor3 = hbs.editor();
+
 			$('button#fullscreen').click(function (e) {
 				e.preventDefault();
-				$('#fullscreen-wrapper').fullscreen('open');
+				var el = $('#fullscreen-wrapper');
+				el.fullscreen('open');
+				setTimeout(function () {
+					el.fullscreen('close');
+				}, 5000)
 			});
 			$('button#fullviewport').click(function (e) {
 				e.preventDefault();
-				$('#fullscreen-wrapper').fullviewport('open');
-
+				var el = $('#fullscreen-wrapper');
+				el.fullviewport('open');
 				setTimeout(function () {
-					$('#fullscreen-wrapper').fullviewport('close');
+					el.fullviewport('close');
 				}, 5000)
 			});
 		});
@@ -98,41 +106,11 @@
 						<div class="CodeMirrorToobar">Toolbar</div>
 
 						<div class="CodeMirrorBody" style="flex-grow: 1;overflow: scroll;">
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<p>1</p>
-							<textarea></textarea>
+							<textarea class="form-control" name="html" mode="handlebars">
+{{#each foobars extraThing}}
+<h1 class="foobar">{{echo 'hello world'}</h1>
+{{/if}}
+							</textarea>
 
 						</div>
 
