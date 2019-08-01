@@ -49,14 +49,12 @@ module.exports = function (grunt) {
 				'./node_modules/codemirror/addon/lint/css-lint.js',
 				'./node_modules/codemirror/addon/lint/javascript-lint.js',
 				'./node_modules/codemirror/addon/search/jump-to-line.js',
-				// './node_modules/codemirror/addon/display/fullscreen.js',
 
 				// our libs
 				'libs/addon/lint/handlebars-lint.js',
 				'libs/addon/display/fullscreen.js',
 				'libs/jquery/editor.js',
 				'libs/jquery/fullscreen.js',
-				'libs/jquery/autosize.js'
 			]
 		},
 		css: {

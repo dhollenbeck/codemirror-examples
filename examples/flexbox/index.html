@@ -56,28 +56,34 @@
 		.CodeMirrorBody {
 			background-color: red;
 		}
+		/* display: flex;flex-direction: column;flex-wrap: nowrap;justify-content:space-between;align-items: stretch; */
+		/* flex-grow: 1;overflow: scroll; */
+		.flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
+		.flex-child-fixed {flex: none;}
+		.flex-child-grow {flex: auto; overflow-y:scroll;}
 	</style>
 	<script>
 		$(function () {
 			var hbs = $('textarea[mode="handlebars"]');
 
-			var editor3 = hbs.editor();
+			var editor = hbs.editor({height: '500px'});
+
 
 			$('button#fullscreen').click(function (e) {
 				e.preventDefault();
 				var el = $('#fullscreen-wrapper');
 				el.fullscreen('open');
-				setTimeout(function () {
-					el.fullscreen('close');
-				}, 5000)
+				// setTimeout(function () {
+				// 	el.fullscreen('close');
+				// }, 5000)
 			});
 			$('button#fullviewport').click(function (e) {
 				e.preventDefault();
 				var el = $('#fullscreen-wrapper');
 				el.fullviewport('open');
-				setTimeout(function () {
-					el.fullviewport('close');
-				}, 5000)
+				// setTimeout(function () {
+				// 	el.fullviewport('close');
+				// }, 5000)
 			});
 		});
 	</script>
@@ -102,10 +108,10 @@
 				<label for="html" class="col-sm-2 control-label">Handlebars</label>
 				<div class="col-sm-10">
 
-					<div id="fullscreen-wrapper" class="fullscreen-wrapper" style="display: flex;flex-direction: column;flex-wrap: nowrap;justify-content:space-between;align-items: stretch;">
-						<div class="CodeMirrorToobar">Toolbar</div>
+					<div id="fullscreen-wrapper" class="fullscreen-wrapper flex-container">
+						<div class="CodeMirrorToobar flex-child-fixed">Toolbar</div>
 
-						<div class="CodeMirrorBody" style="flex-grow: 1;overflow: scroll;">
+						<div class="CodeMirrorBody flex-child-grow">
 							<textarea class="form-control" name="html" mode="handlebars">
 {{#each foobars extraThing}}
 <h1 class="foobar">{{echo 'hello world'}</h1>
@@ -114,7 +120,7 @@
 
 						</div>
 
-						<div class="CodeMirrorFooter">Footer</div>
+						<div class="CodeMirrorFooter flex-child-fixed">Footer</div>
 
 					</div>
 				</div>

@@ -65,3 +65,6 @@ element.editor({
 - https://microsoft.github.io/monaco-editor/
 
 
+## Drag Resizing
+- https://github.com/codemirror/CodeMirror/issues/850
+- https://interactjs.io/
