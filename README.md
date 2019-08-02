@@ -83,49 +83,8 @@ There should be option to limit the size of the editor in auto-scrolling.
 - **Support window scroll on exit:** Be the user presses the fullscreen mode the browser window might be scrolled. This scrolled state should be restore upon existing fullscreen.
 - **Support codemirror scroll on enter:** Before the user presses fullscreen mode the editor might be too large for fullscreen. In this case the editor will scroll. The cursor can be below the fold.
 
-## Todo: Better working example of footer.
-- Show percent changed.
-- Show `insert` mode state.
-- Show line and col indicator (Ln 85, Col 42).
-- Show editor mode (HBS, HTML, CSS, Javascript).
-- Show linter status.
-- Show provejs validation errors.
-- Show template identifier.
-
-```js
-	// todo: move to $.fn.codemirrorFooter
-	function delta(size1, size2) {
-		var delta = (100 * (size2 - size1) / size1).toFixed(2);
-		return (isNaN(delta))? '0.00' : delta;
-	}
-	function footerStatus(cm, bytesOld) {
-		var doc = cm.getDoc();
-		var str = doc.getValue();
-		var bytesNew = str.length;
-		var diff = delta(bytesOld, bytesNew);
-		var overwrite = (cm.state.overwrite)? 'On' : 'Off';
-		var status = 'Overwrite: @overwrite Diff: @diff%'.replace('@overwrite', overwrite).replace('@diff', diff);
-		return status;
-	}
-	function footerStatus1() {
-		footer1.text(footerStatus(editor1, bytes1));
-	}
-
-	editor1.on('keyHandled', function(cm, name) {
-		if (name === 'Insert') footerStatus1();
-	});
-	editor1.on('changes', footerStatus1);
-
-	footerStatus1();
-
-```
-
-```js
-$('.cm-footer').editorFooter({
-	cm: editor,
-	provejs: form
-});
-```
+## Todo: add byte system to footer
+Show the textarea value length as `10.1 KB`
 
 ## Todo: Workings of Monaco Editor For Comparison
 - https://microsoft.github.io/monaco-editor/
