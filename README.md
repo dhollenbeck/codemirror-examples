@@ -122,7 +122,7 @@ There should be option to limit the size of the editor in auto-scrolling.
 
 ```js
 $('.cm-footer').editorFooter({
-	codemirror: editor,
+	cm: editor,
 	provejs: form
 });
 ```

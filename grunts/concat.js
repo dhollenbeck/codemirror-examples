@@ -55,6 +55,7 @@ module.exports = function (grunt) {
 				'libs/addon/display/fullscreen.js',
 				'libs/jquery/editor.js',
 				'libs/jquery/fullscreen.js',
+				'libs/jquery/footer.js',
 			]
 		},
 		css: {

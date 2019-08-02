@@ -14,6 +14,7 @@
 	<link rel="stylesheet" href="../../libs/yamm/yamm.css">
 	<link rel="stylesheet" href="../../libs/app/app.css">
 	<link rel="stylesheet" href="../../libs/typeahead/typeahead.css">
+	<link href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" rel="stylesheet">
 
 	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
 	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -197,23 +198,42 @@
 			$('body').on('click', '.dropdown-menu', function (e) {
 				$(this).parent().is('.open') && e.stopPropagation();
 			});
+
+			// footer
+			$('.cm-footer').codemirrorFooter({
+				cm: editor,
+				provejs: form
+			});
 		});
 	</script>
 
 	<style>
-		.CodeMirror {
-			border: 1px solid #eee;
-			min-height: 50px;
-		}
 
-		.cm-footer {
-			background-color: #CCC;
-			color: black;
-		}
+		.navbar {border-radius: 4px 4px 0px 0px !Important;}
 
-		.navbar {
-			border-radius: 4px 4px 0px 0px !Important;
-		}
+		.CodeMirror {border: 1px solid #eee;min-height: 50px;}
+
+		/* footer flex */
+		.cm-footer {display:flex; flex-direction: row;}
+		.cm-footer .branch {flex: none;}
+		.cm-footer .issues {flex: none;}
+		.cm-footer .message {flex: auto;}
+		.cm-footer .cursor {flex: none;}
+		.cm-footer .insert {flex: none;}
+		.cm-footer .mode {flex: none;}
+		.cm-footer .smile {flex: none;}
+
+		.cm-footer .branch {min-width: 60px;}
+		.cm-footer .issues {min-width: 60px;}
+		.cm-footer .message {}
+		.cm-footer .cursor {min-width: 60px;}
+		.cm-footer .insert {}
+		.cm-footer .mode {}
+		.cm-footer .smile {}
+		.cm-footer span {padding-left: 5px; padding-right: 5px;}
+
+		.cm-footer {background-color: #b4d3ec;color: black;font-family: monospace; font-size: 12px;}
+		.cm-footer span {border-left: 1px solid #eee;text-align: center;}
 	</style>
 
 </head>
@@ -475,60 +495,7 @@
 							<textarea class="form-control" name="html" mode="handlebars">
 {{#each foobars extraThing}}
 <h1 class="foobar">{{echo 'hello world'}</h1>
-{{/if}}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</textarea>
+{{/if}}</textarea>
 						</div>
 
 						<div class="cm-footer cm-flex-child-fixed">Footer</div>
