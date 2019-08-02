@@ -71622,11 +71622,11 @@ $.fn.codemirrorFooter = function (opts) {
 
 	function toHtml() {
 		var html = [
-			'<span class="resource" title="Resource being edited.">' + toReource() + '</span>',
+			'<span class="resource hidden-xs hidden-sm" title="Resource being edited.">' + toReource() + '</span>',
 			'<span class="field" title="Field being edited.">' + toField() + '</span>',
 			'<span class="message" title="Validation message"></span>',
 			'<span class="cursor" title="Cursor position">' + toCursor() + '</span>',
-			'<span class="insert" title="Insert overwrite mode">' + toInsert() + '</span>',
+			'<span class="insert hidden-xs" title="Insert overwrite mode">' + toInsert() + '</span>',
 			'<span class="mode" title="Editor mode">' + toMode() + '</span>',
 			'<span class="smile" title="Smile, God loves you!"><i class="far fa-smile"></i></span>'
 		].join('');
