@@ -11,12 +11,18 @@
 })(function (CodeMirror) {
 	"use strict";
 
-	CodeMirror.defineOption("fullScreen", false, function (cm, val, old) {
+	CodeMirror.defineOption('fullscreen', false, function (cm, val, old) {
 		if (old == CodeMirror.Init) old = false;
 		if (!old == !val) return;
 		if (val) setFullscreen(cm);
 		else setNormal(cm);
 	});
+
+	// register a command so that we can invoke via
+	// cm.execCommand('fullScreen')
+	CodeMirror.commands.fullscreen = function(cm) {
+		cm.setOption('fullscreen', !cm.getOption('fullscreen'));
+	};
 
 	function getEdit(cm) {
 		return cm.getWrapperElement();

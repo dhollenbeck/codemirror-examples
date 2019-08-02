@@ -71339,12 +71339,18 @@ var ruleSets = {
 })(function (CodeMirror) {
 	"use strict";
 
-	CodeMirror.defineOption("fullScreen", false, function (cm, val, old) {
+	CodeMirror.defineOption('fullscreen', false, function (cm, val, old) {
 		if (old == CodeMirror.Init) old = false;
 		if (!old == !val) return;
 		if (val) setFullscreen(cm);
 		else setNormal(cm);
 	});
+
+	// register a command so that we can invoke via
+	// cm.execCommand('fullScreen')
+	CodeMirror.commands.fullscreen = function(cm) {
+		cm.setOption('fullscreen', !cm.getOption('fullscreen'));
+	};
 
 	function getEdit(cm) {
 		return cm.getWrapperElement();
@@ -71406,10 +71412,10 @@ $.fn.editor = function (options) {
 		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
 		extraKeys: {
 			'F11': function(cm) {
-				cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+				cm.execCommand('fullscreen');
 			},
 			'Esc': function(cm) {
-				if (cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+				if (cm.getOption('fullscreen')) cm.execCommand('fullscreen');
 			}
 		  }
 	});

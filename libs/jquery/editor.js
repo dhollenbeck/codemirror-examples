@@ -30,10 +30,10 @@ $.fn.editor = function (options) {
 		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
 		extraKeys: {
 			'F11': function(cm) {
-				cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+				cm.execCommand('fullscreen');
 			},
 			'Esc': function(cm) {
-				if (cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+				if (cm.getOption('fullscreen')) cm.execCommand('fullscreen');
 			}
 		  }
 	});
