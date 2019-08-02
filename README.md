@@ -58,7 +58,7 @@ You can add Bootstrap navbars (toobars) and footers to codemirror. The HTML flex
 
 The css is shown below and is included in the examples:
 ```css
-.cm-flex-container {display:flex; display: flex;flex-direction: column;height: 100%;}
+.cm-flex-container {display: flex;flex-direction: column;height: 100%;}
 .cm-flex-child-fixed {flex: none;}
 .cm-flex-child-grow {flex: auto; overflow-y:hidden;}
 ```
