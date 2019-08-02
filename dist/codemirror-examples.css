@@ -537,5 +537,9 @@ li.CodeMirror-hint-active {
 
 .cm-footer span {padding-left: 5px; padding-right: 5px;}
 
-.cm-footer {background-color: #b4d3ec;color: black;font-family: monospace; font-size: 12px;}
-.cm-footer span {border-left: 1px solid #eee;text-align: center;}
+.cm-footer {background-color: #b4d3ec;color: black;font-family: monospace; font-size: 12px;margin: 0px; padding: 0px;}
+.cm-footer span {text-align: center;}
+
+.cm-footer span + span {border-left: 1px solid #a5bacb;}
+.cm-footer span.alert-danger + span.alert-danger {border-left: 1px solid #dfc3c3;}
+

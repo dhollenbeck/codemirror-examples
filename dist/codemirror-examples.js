@@ -71630,8 +71630,10 @@ $.fn.codemirrorFooter = function (opts) {
 
 	form.on('status.form.prove status.input.prove', function(event, data) {
 
+
 		// ignore all but 'validated events
 		if (data.status !== 'validated') return;
+		if (data.field !== field) return;
 
 		var span = footer.find('.message');
 		var message = toMessage(field, data);
