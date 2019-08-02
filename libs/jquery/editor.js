@@ -11,6 +11,7 @@ $.fn.editor = function (options) {
 		name: "handlebars",
 		base: "text/html"
 	};
+	if (mode === 'json') mode = 'application/json';
 
 	//read-write
 

@@ -25,6 +25,7 @@
     "handlebars": "^4.1.2",
     "htmlhint": "^0.11.0",
     "jshint": "^2.10.2",
+    "jsonlint": "^1.6.3",
     "provejs-handlebars": "0.0.44"
   },
   "dependencies": {}
