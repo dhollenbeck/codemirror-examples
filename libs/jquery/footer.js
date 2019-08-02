@@ -2,34 +2,16 @@ $.fn.codemirrorFooter = function (opts) {
 
 	function toHtml() {
 		var html = [
-			'<span class="branch">branch</span>',
-			'<span class="issues">issues</span>',
-			'<span class="message">message</span>',
-			'<span class="cursor">' + toCursor() + '</span>',
-			'<span class="insert">' + toInsert() + '</span>',
-			'<span class="mode">' + toMode() + '</span>',
+			'<span class="resource" title="Resource being edited.">' + toReource() + '</span>',
+			'<span class="field" title="Field being edited.">' + toField() + '</span>',
+			'<span class="message" title="Validation message"></span>',
+			'<span class="cursor" title="Cursor position">' + toCursor() + '</span>',
+			'<span class="insert" title="Overwrite mode">' + toInsert() + '</span>',
+			'<span class="mode" title="Editor mode">' + toMode() + '</span>',
 			'<span class="smile" title="Smile, God loves you!"><i class="far fa-smile"></i></span>'
 		].join('');
 		return html;
 	}
-
-	// function delta(size1, size2) {
-	// 	var delta = (100 * (size2 - size1) / size1).toFixed(2);
-	// 	return (isNaN(delta))? '0.00' : delta;
-	// }
-
-	// function footerStatus(cm, bytes1) {
-	// 	var doc = cm.getDoc();
-	// 	var str = doc.getValue();
-	// 	var bytes2 = str.length;
-	// 	var diff = delta(bytes1, bytes2);
-	// 	var status = 'Diff: @diff%'.replace('@diff', diff);
-	// 	return status;
-	// }
-
-	// function update() {
-	// 	// footer.text(footerStatus(cm, bytes1));
-	// }
 
 	function toInsert() {
 		var insert = (!cm.state.overwrite)? 'On' : 'Off';
@@ -46,11 +28,26 @@ $.fn.codemirrorFooter = function (opts) {
 		var ch = pos.ch + 1;
 		return 'Ln ' + ln + ', Col ' + ch;
 	}
+	function toMessage(field, data) {
+		if (data.validation === 'danger') {
+			return '<i class="fas fa-bug"></i> ' + data.message;
+		} else {
+			return '<i class="far fa-thumbs-up"></i> Good job!';
+		}
+	}
+	function toReource() {
+		return opts.resource || '';
+	}
+	function toField() {
+		return opts.field || cm.getTextArea().name;;
+	}
 
 	var cm = opts.cm;
 	var form = opts.provejs;
+	var field = toField();
 	var footer = $(this);
-	// footer.css({'display': 'flex'});
+	var textarea = $(cm.getTextArea());
+
 	footer.html(toHtml());
 
 	// event handlers
@@ -60,4 +57,42 @@ $.fn.codemirrorFooter = function (opts) {
 	cm.on('cursorActivity', function (cm){
 		footer.find('.cursor').text(toCursor());
 	});
+
+	form.on('status.form.prove status.input.prove', function(event, data) {
+
+		// ignore all but 'validated events
+		if (data.status !== 'validated') return;
+
+		var span = footer.find('.message');
+		var message = toMessage(field, data);
+		var spans = footer.find('span');
+
+		/*{
+			field: "html"
+			message: "Please fix the linting errors shown above."
+			status: "validated"
+			validation: "danger"
+			validator: "proveCallback"
+		}*/
+
+		spans.removeClass('alert-success');
+		spans.removeClass('alert-danger');
+		spans.removeClass('alert-warning');
+
+		if (data.validation === 'success') {
+			span.html(message);
+			// spans.addClass('alert-success');
+		} else if (data.validation === 'danger') {
+			span.html(message);
+			spans.addClass('alert-danger');
+		} else if (data.validation === 'warning') {
+			span.html(message);
+			spans.addClass('alert-warning');
+		} else if (data.validation === 'reset') {
+			span.empty();
+		}
+	});
+
+	// force valdation so the UI updates on first load
+	textarea.validate();
 };

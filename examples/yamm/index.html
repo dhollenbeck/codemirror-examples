@@ -41,17 +41,19 @@
 
 	<script>
 		$(function () {
-			//return;
+
+			var form = $('form');
 			var hbs = $('textarea[mode="handlebars"]');
+			var footer = $('.cm-footer');
 			var editor = hbs.editor({
 				height: 'auto' // auto, 500
 			});
 
+
 			// validation
-			var form = $('form');
 			form.prove({
 				fields: {
-					hbs: {
+					html: {
 						selector: 'textarea[mode="handlebars"]',
 						validators: {
 							proveCallback: {
@@ -200,9 +202,10 @@
 			});
 
 			// footer
-			$('.cm-footer').codemirrorFooter({
+			footer.codemirrorFooter({
 				cm: editor,
-				provejs: form
+				provejs: form,
+				resource: 'template@version'
 			});
 		});
 	</script>
@@ -215,18 +218,18 @@
 
 		/* footer flex */
 		.cm-footer {display:flex; flex-direction: row;}
-		.cm-footer .branch {flex: none;}
-		.cm-footer .issues {flex: none;}
+		.cm-footer .resource {flex: none;}
+		.cm-footer .field {flex: none;}
 		.cm-footer .message {flex: auto;}
 		.cm-footer .cursor {flex: none;}
 		.cm-footer .insert {flex: none;}
 		.cm-footer .mode {flex: none;}
 		.cm-footer .smile {flex: none;}
 
-		.cm-footer .branch {min-width: 60px;}
-		.cm-footer .issues {min-width: 60px;}
+		.cm-footer .resource {}
+		.cm-footer .field {}
 		.cm-footer .message {}
-		.cm-footer .cursor {min-width: 60px;}
+		.cm-footer .cursor {}
 		.cm-footer .insert {}
 		.cm-footer .mode {}
 		.cm-footer .smile {}
