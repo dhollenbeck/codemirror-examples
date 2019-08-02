@@ -21,6 +21,7 @@ module.exports = function (grunt) {
 				'./node_modules/csslint/dist/csslint.js',
 				'./node_modules/htmlhint/dist/htmlhint.js',
 				'./node_modules/jshint/dist/jshint.js',
+				'./node_modules/jsonlint/web/jsonlint.js',
 				'./node_modules/handlebars/dist/handlebars.min.js',
 				// './node_modules/handlebars-error-parser/index.js',
 				'./node_modules/provejs-handlebars/dist/provejs-handlebars.js',
@@ -48,6 +49,7 @@ module.exports = function (grunt) {
 				'./node_modules/codemirror/addon/lint/html-lint.js',
 				'./node_modules/codemirror/addon/lint/css-lint.js',
 				'./node_modules/codemirror/addon/lint/javascript-lint.js',
+				'./node_modules/codemirror/addon/lint/json-lint.js',
 				'./node_modules/codemirror/addon/search/jump-to-line.js',
 
 				// our libs

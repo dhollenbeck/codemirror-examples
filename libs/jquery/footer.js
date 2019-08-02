@@ -18,9 +18,11 @@ $.fn.codemirrorFooter = function (opts) {
 		return 'Insert: ' + insert;
 	}
 	function toMode() {
-		var mode = cm.getMode().name;
-		if (mode === 'handlebars') mode = 'hbs';
-		return mode.toUpperCase();
+		var mode = cm.getMode();
+		var name = mode.name;
+		if (mode.jsonMode) name = 'json';
+		if (name === 'handlebars') name = 'hbs';
+		return name.toUpperCase();
 	}
 	function toCursor() {
 		var pos = cm.getCursor();
