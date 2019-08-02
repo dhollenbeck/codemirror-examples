@@ -58,6 +58,7 @@ $.fn.fullviewport = function(dir) {
 	function close(wrap) {
 		html.css({overflow: ''});
 		wrap.styleRestore();
+		wrap.removeClass('cm-fullscreen-deloyed');
 	}
 
 	// go full viewport
@@ -65,6 +66,7 @@ $.fn.fullviewport = function(dir) {
 		wrap.styleSave();
 
 		// set <wrap>
+		wrap.addClass('cm-fullscreen-deloyed');
 		wrap.css({
 			width: '',
 			height: '100vh',

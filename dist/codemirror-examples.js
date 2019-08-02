@@ -71418,18 +71418,35 @@ $.fn.editor = function (options) {
 	// autor esize. The editor.setSize() method sets style attribute of the
 	// <div class="CodeMirror cm-s-default CodeMirror-wrap" style="height: auto;">
 	// See: https://codemirror.net/demo/resize.html
+
+	// set defaults
 	options.height = options.height || 'auto';
 	options.linesLock = options.linesLock || 25;
-	editor.setSize(null, options.height);
-	var heightLocked = false;
+
+	// set inital height
+	var lines = editor.getValue().split('\n').length;
+	if ( lines < options.linesLock) {
+		editor.setSize(null, options.height);
+	} else {
+		editor.setSize(null, 513);
+	}
+
+	// handle auto scaling upto 25 lines
+	var locked = false;
 	editor.on('change', function (cm) {
-		var lines = cm.doc.size;
-		var el, height;
-		if (!heightLocked && lines > options.linesLock) {
-			heightLocked = true;
-			el = cm.getWrapperElement();
-			height = $(el).height();
-			cm.setSize(null, height + 5);
+		lines = cm.doc.size;
+		var el = $(cm.getWrapperElement());
+		var heightActual = el.height();
+		var style = el[0].style.height;
+		var isFullscreen = style === '100%';
+		if (isFullscreen) {
+			// do nothing
+		} else if (!locked && lines > options.linesLock) {
+			locked = true;
+			cm.setSize(null, heightActual);
+		} else if (lines < options.linesLock) {
+			locked = false;
+			cm.setSize(null, options.height);
 		}
 	});
 
@@ -71513,6 +71530,7 @@ $.fn.fullviewport = function(dir) {
 	function close(wrap) {
 		html.css({overflow: ''});
 		wrap.styleRestore();
+		wrap.removeClass('cm-fullscreen-deloyed');
 	}
 
 	// go full viewport
@@ -71520,6 +71538,7 @@ $.fn.fullviewport = function(dir) {
 		wrap.styleSave();
 
 		// set <wrap>
+		wrap.addClass('cm-fullscreen-deloyed');
 		wrap.css({
 			width: '',
 			height: '100vh',
