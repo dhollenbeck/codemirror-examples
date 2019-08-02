@@ -524,3 +524,18 @@ li.CodeMirror-hint-active {
 .cm-flex-container {display: flex; flex-direction: column; height: 100%;}
 .cm-flex-child-fixed {flex: none;}
 .cm-flex-child-grow {flex: auto; overflow-y: hidden;}
+
+/* footer flex */
+.cm-footer {display:flex; flex-direction: row;}
+.cm-footer .resource {flex: none;}
+.cm-footer .field {flex: none;}
+.cm-footer .message {flex: auto;}
+.cm-footer .cursor {flex: none;}
+.cm-footer .insert {flex: none;}
+.cm-footer .mode {flex: none;}
+.cm-footer .smile {flex: none;}
+
+.cm-footer span {padding-left: 5px; padding-right: 5px;}
+
+.cm-footer {background-color: #b4d3ec;color: black;font-family: monospace; font-size: 12px;}
+.cm-footer span {border-left: 1px solid #eee;text-align: center;}
