@@ -71421,14 +71421,14 @@ $.fn.editor = function (options) {
 
 	// set defaults
 	options.height = options.height || 'auto';
-	options.linesLock = options.linesLock || 25;
+	options.linesLock = options.linesLock || 30;
 
 	// set inital height
 	var lines = editor.getValue().split('\n').length;
 	if ( lines < options.linesLock) {
 		editor.setSize(null, options.height);
 	} else {
-		editor.setSize(null, 513);
+		editor.setSize(null, '630px');
 	}
 
 	// handle auto scaling upto 25 lines
