@@ -6,7 +6,7 @@ $.fn.codemirrorFooter = function (opts) {
 			'<span class="field" title="Field being edited.">' + toField() + '</span>',
 			'<span class="message" title="Validation message"></span>',
 			'<span class="cursor" title="Cursor position">' + toCursor() + '</span>',
-			'<span class="insert" title="Overwrite mode">' + toInsert() + '</span>',
+			'<span class="insert" title="Insert overwrite mode">' + toInsert() + '</span>',
 			'<span class="mode" title="Editor mode">' + toMode() + '</span>',
 			'<span class="smile" title="Smile, God loves you!"><i class="far fa-smile"></i></span>'
 		].join('');

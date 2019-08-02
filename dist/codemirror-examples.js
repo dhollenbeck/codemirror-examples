@@ -71423,35 +71423,36 @@ $.fn.editor = function (options) {
 	options.height = options.height || 'auto';
 	options.linesLock = options.linesLock || 30;
 
-	// set inital height
+	// Set inital height
 	var lines = editor.getValue().split('\n').length;
 	if ( lines < options.linesLock) {
+		editor.setOption('linesLocked', false);
 		editor.setSize(null, options.height);
 	} else {
+		editor.setOption('linesLocked', true);
 		editor.setSize(null, '630px');
 	}
 
-	// handle auto scaling upto 25 lines
-	var locked = false;
-	editor.on('change', function (cm) {
-		lines = cm.doc.size;
+	function getHeight(cm) {
 		var el = $(cm.getWrapperElement());
 		var heightActual = el.height();
-		var style = el[0].style.height;
-		var isFullscreen = style === '100%';
-		if (isFullscreen) {
-			// do nothing
-		} else if (!locked && lines > options.linesLock) {
-			locked = true;
-			cm.setSize(null, heightActual);
+		return heightActual;
+	}
+
+	// handle auto scaling upto 25 lines
+	// set a custom cm option `linesLocked`
+	editor.on('change', function (cm) {
+		lines = cm.doc.size;
+		if (!cm.getOption('linesLocked') && lines > options.linesLock) {
+			cm.setOption('linesLocked', true);
+			cm.setSize(null, getHeight(cm));
 		} else if (lines < options.linesLock) {
-			locked = false;
+			cm.setOption('linesLocked', false);
 			cm.setSize(null, options.height);
 		}
 	});
 
 	editor.on('change', function (editor) {
-		// perhaps throttle editor.save()
 		editor.save();
 	});
 
@@ -71576,7 +71577,7 @@ $.fn.codemirrorFooter = function (opts) {
 			'<span class="field" title="Field being edited.">' + toField() + '</span>',
 			'<span class="message" title="Validation message"></span>',
 			'<span class="cursor" title="Cursor position">' + toCursor() + '</span>',
-			'<span class="insert" title="Overwrite mode">' + toInsert() + '</span>',
+			'<span class="insert" title="Insert overwrite mode">' + toInsert() + '</span>',
 			'<span class="mode" title="Editor mode">' + toMode() + '</span>',
 			'<span class="smile" title="Smile, God loves you!"><i class="far fa-smile"></i></span>'
 		].join('');
