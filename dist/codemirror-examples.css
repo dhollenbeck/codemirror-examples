@@ -512,13 +512,6 @@ li.CodeMirror-hint-active {
   color: white;
 }
 
-.CodeMirror-fullscreen {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  height: auto;
-  z-index: 10000;
-}
-
 .codemirror-lines {min-height: 50px;}
 
 .cm-flex-container {display: flex; flex-direction: column; height: 100%;}
@@ -542,4 +535,11 @@ li.CodeMirror-hint-active {
 
 .cm-footer span + span {border-left: 1px solid #a5bacb;}
 .cm-footer span.alert-danger + span.alert-danger {border-left: 1px solid #dfc3c3;}
+
+/* .CodeMirror-fullscreenxxxxxx {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  height: auto;
+  z-index: 1040;
+} */
 

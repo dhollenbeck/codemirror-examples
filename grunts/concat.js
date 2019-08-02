@@ -67,7 +67,7 @@ module.exports = function (grunt) {
 				'./node_modules/codemirror/addon/lint/lint.css',
 				'./node_modules/codemirror/addon/dialog/dialog.css',
 				'./node_modules/codemirror/addon/hint/show-hint.css',
-				'libs/addon/display/fullscreen.css',
+				// 'libs/addon/display/fullscreen.css',
 				'./libs/app/overrides.css'
 			]
 		}
