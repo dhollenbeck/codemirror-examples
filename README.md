@@ -92,6 +92,41 @@ There should be option to limit the size of the editor in auto-scrolling.
 - Show provejs validation errors.
 - Show template identifier.
 
+```js
+	// todo: move to $.fn.codemirrorFooter
+	function delta(size1, size2) {
+		var delta = (100 * (size2 - size1) / size1).toFixed(2);
+		return (isNaN(delta))? '0.00' : delta;
+	}
+	function footerStatus(cm, bytesOld) {
+		var doc = cm.getDoc();
+		var str = doc.getValue();
+		var bytesNew = str.length;
+		var diff = delta(bytesOld, bytesNew);
+		var overwrite = (cm.state.overwrite)? 'On' : 'Off';
+		var status = 'Overwrite: @overwrite Diff: @diff%'.replace('@overwrite', overwrite).replace('@diff', diff);
+		return status;
+	}
+	function footerStatus1() {
+		footer1.text(footerStatus(editor1, bytes1));
+	}
+
+	editor1.on('keyHandled', function(cm, name) {
+		if (name === 'Insert') footerStatus1();
+	});
+	editor1.on('changes', footerStatus1);
+
+	footerStatus1();
+
+```
+
+```js
+$('.cm-footer').editorFooter({
+	codemirror: editor,
+	provejs: form
+});
+```
+
 ## Todo: Workings of Monaco Editor For Comparison
 - https://microsoft.github.io/monaco-editor/
 
