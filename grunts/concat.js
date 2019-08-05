@@ -31,6 +31,7 @@ module.exports = function (grunt) {
 				'./node_modules/codemirror/mode/javascript/javascript.js',
 				'./node_modules/codemirror/mode/xml/xml.js',
 				'./node_modules/codemirror/mode/css/css.js',
+				'./node_modules/codemirror/mode/htmlmixed/htmlmixed.js',
 				'./node_modules/codemirror/mode/markdown/markdown.js',
 				'./node_modules/codemirror/addon/mode/simple.js',
 				'./node_modules/codemirror/addon/mode/multiplex.js',
