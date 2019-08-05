@@ -22,6 +22,7 @@ $.fn.codemirrorFooter = function (opts) {
 		var name = mode.name;
 		if (mode.jsonMode) name = 'json';
 		if (name === 'handlebars') name = 'hbs';
+		if (name === 'htmlmixed') name = 'html';
 		return name.toUpperCase();
 	}
 	function toCursor() {
