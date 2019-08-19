@@ -70595,7 +70595,7 @@ CodeMirror.registerGlobalHelper("fold", "comment", function(mode) {
         if (!n) { hide(); break; }
       }
       if (!tooltip) return clearInterval(poll);
-    }, 400);
+    }, 40000);
     CodeMirror.on(node, "mouseout", hide);
   }
 

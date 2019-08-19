@@ -543,3 +543,6 @@ li.CodeMirror-hint-active {
   z-index: 1040;
 } */
 
+.CodeMirror-lint-tooltip {
+  z-index: 1050;
+}
