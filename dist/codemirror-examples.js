@@ -42161,20 +42161,31 @@ function isErrors(ast) {
 	return !!ast.length;
 }
 
+function mergeRules() {
+	var res = {};
+	for (var i = 0; i<arguments.length; i++) {
+		for (var x in arguments[i]) {
+			res[x] = arguments[i][x];
+		}
+	}
+	return res;
+}
+
 exports.verifySync = function (html, rules) {
 
-	// todo: extend defaults
-	// Handlebars.Utils.extend(exports._config, rules);
-	if (!rules) rules = exports._configs;
+	var errors, ast, nodes;
 
-	var errors;
-	var ast = Parser.ast(html, rules);
+	// extend rules for built-in hbs functions with
+	// the user defined rules.
+	rules = mergeRules(exports._configs, rules);
+
+	ast = Parser.ast(html, rules);
 
 	// parser may not be able to convert to ast.
 	// if so return parser detected errors.
 	if (isErrors(ast)) return ast;
 
-	var nodes = ast.body || ast;
+	nodes = ast.body || ast;
 	errors = Helpers.verify(nodes, rules);
 	return errors;
 };
