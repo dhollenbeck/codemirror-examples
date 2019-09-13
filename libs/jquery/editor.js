@@ -77,11 +77,15 @@ $.fn.editor = function (options) {
 		}
 	});
 
-	editor.on('change', function (editor) {
-		editor.save();
+	editor.on('change', function (cm) {
+		cm.save();
 	});
 
-	editor.on('update', function (editor) {
+	editor.on('paste', function (cm) {
+		cm.refresh(); // force resize and re-validate on paste
+	});
+
+	editor.on('update', function (cm) {
 		// validate with https://github.com/provejs/provejs-jquery
 		if (textarea.dirty) textarea.dirty(true);
 		if (textarea.validate) textarea.validate();
