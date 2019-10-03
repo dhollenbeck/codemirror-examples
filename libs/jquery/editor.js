@@ -26,7 +26,14 @@ $.fn.editor = function (options) {
 		autoCloseTags: true,
 		foldGutter: true,
 		dragDrop: true,
-		lint: true,
+
+		// lint: true,
+		lint: {
+			tooltips: 'gutter'
+		},
+
+
+
 		viewportMargin: Infinity,
 		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
 		extraKeys: {

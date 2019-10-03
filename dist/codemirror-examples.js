@@ -70613,7 +70613,8 @@ CodeMirror.registerGlobalHelper("fold", "comment", function(mode) {
   function LintState(cm, options, hasGutter) {
     this.marked = [];
     this.options = options;
-    this.timeout = null;
+	this.timeout = null;
+	this.tooltips = options.tooltips;
     this.hasGutter = hasGutter;
     this.onMouseOver = function(e) { onMouseOver(cm, e); };
     this.waitingFor = 0
@@ -71296,7 +71297,14 @@ $.fn.editor = function (options) {
 		autoCloseTags: true,
 		foldGutter: true,
 		dragDrop: true,
-		lint: true,
+
+		// lint: true,
+		lint: {
+			tooltips: 'gutter'
+		},
+
+
+
 		viewportMargin: Infinity,
 		gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
 		extraKeys: {
