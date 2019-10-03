@@ -89,6 +89,20 @@ Show the textarea value length as `10.1 KB`
 ## Todo: Workings of Monaco Editor For Comparison
 - https://microsoft.github.io/monaco-editor/
 
+## Todo: Problem with sticky tooltips
+When do the following:
+- Create lint error,
+- Click on the source of the error,
+- Move mouse to display the tooltip
+- Type on keyboard to fix the lint error
+- Tooltip is still visable and stuck to the cursor even though the lint error is resolved.
+
+Check the lint integration compared to the demo:
+- Demo: view-source:https://codemirror.net/demo/lint.html
+
+See:
+//https://github.com/codemirror/CodeMirror/pull/4308
+
 
 # Workflow
 
