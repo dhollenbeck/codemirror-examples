@@ -1,6 +1,6 @@
 $.fn.editor = function (options) {
 
-	var textarea, mode, editor;
+	var textarea, mode, editor, lines;
 
 	options = options || {};
 
@@ -46,8 +46,9 @@ $.fn.editor = function (options) {
 		  }
 	});
 
+	// Set inital editor height
 	// Set editor size. We set the editor.setSize(null, 'auto') to enable
-	// autor esize. The editor.setSize() method sets style attribute of the
+	// auto resize. The editor.setSize() method sets style attribute of the
 	// <div class="CodeMirror cm-s-default CodeMirror-wrap" style="height: auto;">
 	// See: https://codemirror.net/demo/resize.html
 
@@ -55,12 +56,18 @@ $.fn.editor = function (options) {
 	options.height = options.height || 'auto';
 	options.linesLock = options.linesLock || 30;
 
-	// Set inital height
-	var lines = editor.getValue().split('\n').length;
-	if ( lines < options.linesLock) {
+	lines = editor.getValue().split('\n').length;
+	if (options.height !== 'auto') {
+		// explicit height is set so honor the explicit height.
+		options.height = (typeof options.height !== 'string')? options.height + 'px' : options.height;
 		editor.setOption('linesLocked', false);
 		editor.setSize(null, options.height);
+	} else if ( lines < options.linesLock) {
+		// auto height, lines less then max allowed
+		editor.setOption('linesLocked', false);
+		editor.setSize(null, 'auto');
 	} else {
+		// auto height, lines greater than max allowed
 		editor.setOption('linesLocked', true);
 		editor.setSize(null, '630px');
 	}
