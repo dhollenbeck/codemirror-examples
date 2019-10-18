@@ -1,10 +1,11 @@
 {
   "name": "codemirror-examples",
-  "version": "1.0.51",
+  "version": "1.0.52",
   "description": "Codemirror examples including handlebars linting integration.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node ./build/concat.js"
   },
   "repository": {
     "type": "git",
@@ -17,12 +18,10 @@
   },
   "homepage": "https://github.com/dhollenbeck/codemirror-examples#readme",
   "devDependencies": {
-    "codemirror": "^5.48.2",
+    "codemirror": "^5.49.0",
+    "concat": "^1.0.3",
     "csslint": "^1.0.5",
-    "grunt": "^1.0.4",
-    "grunt-contrib-concat": "^1.0.1",
-    "grunt-eslint": "^22.0.0",
-    "handlebars": "^4.1.2",
+    "handlebars": "^4.4.3",
     "htmlhint": "^0.11.0",
     "jshint": "^2.10.2",
     "jsonlint": "^1.6.3",
